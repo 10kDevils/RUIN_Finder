@@ -1,0 +1,8 @@
+<Bindings>
+	<Binding name="RUIN_FINDER_OPEN" header="RUIN_FINDER" category="ADDONS">
+		RUIN_Finder_Open()
+	</Binding>
+	<Binding name="RUIN_FINDER_TOGGLE" category="ADDONS">
+		RUIN_Finder_ToggleLooking()
+	</Binding>
+</Bindings>
