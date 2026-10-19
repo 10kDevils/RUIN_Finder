@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.3.1" })
+local M = R:RegisterModule("Finder", { version = "0.3.2" })
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
 local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
@@ -293,6 +293,24 @@ local function changed()
     refresh()
 end
 
+-- Start a group listing in one call, for other RUIN modules (Muster's "Find
+-- group" on a boss, rare or enemy sighting). activity is one of ACTIVITIES.
+function M:QuickList(activity, detail, needT, needH, needD)
+    local ok = false
+    for _, a in ipairs(ACTIVITIES) do if a == activity then ok = true end end
+    db.activity = ok and activity or "Questing"
+    db.detail = tostring(detail or ""):sub(1, 30)
+    db.listing = "Group"
+    db.needT, db.needH, db.needD = needT or 0, needH or 0, needD or 0
+    if ui.activity then ui.activity:Refresh() end
+    if ui.listing and ui.listing.Refresh then ui.listing:Refresh() end
+    if ui.detail then ui.detail:SetText(db.detail) end
+    for key, box in pairs(ui.need or {}) do box:SetText(tostring(db[key] or 0)) end
+    setLooking(true)
+    changed()
+    return true
+end
+
 ---------------------------------------------------------------------------
 -- Actions
 ---------------------------------------------------------------------------
@@ -404,9 +422,11 @@ local function buildPage(panel)
     local activity = W.Cycle(card, 110, ACTIVITIES, function() return db.activity end,
         function(v) db.activity = v; alerted = {}; changed() end)
     activity:SetPoint("TOPLEFT", 8, -64)
+    ui.activity, ui.listing = activity, listing
     local detail = W.EditBox(card, 140, function(t) db.detail = t:sub(1, 30); changed() end)
     detail:SetPoint("TOPLEFT", 132, -64)
     detail:SetText(db.detail)
+    ui.detail = detail
     local note = W.EditBox(card, 166, function(t) db.note = t:sub(1, 60); changed() end)
     note:SetPoint("TOPLEFT", 282, -64)
     note:SetText(db.note)
@@ -428,6 +448,8 @@ local function buildPage(panel)
         local box = W.EditBox(ui.needRow, 28, function(t) db[key] = math.max(0, math.min(39, tonumber(t) or 0)); changed() end)
         box:SetPoint("LEFT", x + 20, 0)
         box:SetText(tostring(db[key] or 0))
+        ui.need = ui.need or {}
+        ui.need[key] = box
         if box.SetNumeric then box:SetNumeric(true) end
         x = x + 70
     end

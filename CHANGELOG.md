@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.2 — 2026-10-19
+
+1 change since 0.3.1:
+
+1. New `QuickList` so another RUIN module can start a group listing in one call. RUIN Muster's *Find group* button on a boss, rare or enemy sighting uses it (RUIN Intel's sightings moved to Muster).
+
 ## 0.3.1 — 2026-10-18
 
 1 change since 0.3.0:

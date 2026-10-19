@@ -11,6 +11,7 @@ Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or late
 - **Matching:** a player who can fill a role a group of the same activity needs is a *match*. Both sides get an alert, matches sort to the top of the board, and the badge counts them.
 - **Finding people:** whisper or invite anyone in one click. Filter by activity and by level range (within 3, 5 or 10 levels of you). Hover a row for zone and guild.
 - **Muster events:** upcoming RUIN events with open slots are listed on the board with a *Sign up* button that uses the first role you ticked that is open.
+- **From a sighting:** RUIN Muster's sightings (boss, rare, enemy group) have a *Find group* button that fills in your listing as a group for that activity and turns *I'm looking* on.
 - **Badge:** left-click opens Finder, right-click stops looking, drag to move. Turn it off with the Badge box or `/finder badge`.
 - **Quick commands:** `/finder on dungeon`, `/finder group dungeon`, `/finder off`, `/finder badge`.
 
