@@ -1,11 +1,12 @@
-## Interface: 16001
-## Title: |cffc41e3aRUIN|r Finder
+## Interface: 16001, 120105
+## Title: |cffe6b862RUIN|r Finder
 ## Notes: Org-wide Looking For Group board for every RUIN guild.
 ## Author: RUIN
-## Version: 0.3.0
+## Version: 0.3.1
 ## Dependencies: RUIN_Core
 ## SavedVariablesPerCharacter: RUIN_FinderCharDB
 ## IconTexture: Interface\Icons\INV_Misc_GroupLooking
 ## X-Category: Guild
+## Category: RUIN Gaming Companion App
 
 Finder.lua
