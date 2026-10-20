@@ -1,8 +1,8 @@
 ## Interface: 16001, 120105
-## Title: |cffe6b862RUIN|r Finder
+## Title: |cffe6b862RUIN|r Group Finder (Finder)
 ## Notes: Org-wide Looking For Group board for every RUIN guild.
 ## Author: RUIN
-## Version: 0.3.1
+## Version: 0.3.3
 ## Dependencies: RUIN_Core
 ## SavedVariablesPerCharacter: RUIN_FinderCharDB
 ## IconTexture: Interface\Icons\INV_Misc_GroupLooking
