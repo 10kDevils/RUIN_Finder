@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.5 — 2026-10-19
+
+1 change since 0.3.4 (needs RUIN Core 0.3.12):
+
+1. **A clearer listing card, in Finder's color.** "Your listing" reads left to right: I'm looking, As (player or group), the roles you can play, then Activity, which dungeon or zone, a note and your spec, each box with a hint inside it. Alerts and the on-screen badge moved to the card's corner, away from your roles. The card is shorter for player listings, and the status message points to the Options page for the org key.
+
 ## 0.3.4 — 2026-10-19
 
 1 change since 0.3.3:

@@ -6,14 +6,14 @@
 -- With RUIN Muster installed, events that still need players appear on the board.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 3 then
-    print("|cff54b7d9[RUIN]|r Finder needs a newer RUIN Core (0.3.0 or later).")
+if not R or (R.apiLevel or 1) < 6 then
+    print("|cff54b7d9[RUIN]|r Finder needs a newer RUIN Core (0.3.12 or later).")
     return
 end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.3.4" })
+local M = R:RegisterModule("Finder", { version = "0.3.5" })
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
 local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
@@ -175,7 +175,7 @@ local function updateStatusLine()
     if not db.looking then
         ui.status:SetText(C.dim .. "You are not listed. Tick \"I'm looking\" to post your listing.|r")
     elseif not R:IsConnected() then
-        ui.status:SetText(C.bad .. "Not connected to the RUIN org channel, so nobody else can see your listing yet. Set up or import the org key on the Org page.|r")
+        ui.status:SetText(C.bad .. "Not connected to the RUIN org channel, so nobody else can see your listing yet. Import the org key on the Options page.|r")
     else
         ui.status:SetText(C.good .. (isGroup() and "Your group's listing is live across RUIN." or "Your listing is live across RUIN.") .. "|r")
     end
@@ -241,6 +241,7 @@ local function refresh()
     ui.count:SetText(("%d other%s looking%s"):format(others, others == 1 and "" or "s",
         matches > 0 and ("  ·  " .. C.good .. matches .. " match" .. (matches == 1 and "" or "es") .. "|r") or ""))
     if ui.needRow then ui.needRow:SetShown(isGroup()) end
+    if ui.card then ui.card:SetHeight(isGroup() and 116 or 88) end
 end
 
 function M:OnBeacon(d, sender)
@@ -390,53 +391,58 @@ end
 ---------------------------------------------------------------------------
 local function buildPage(panel)
     ui.panel = panel
+    -- Your listing: what you want, then (for groups) who you still need.
     local card = W.Card(panel)
     card:SetPoint("TOPLEFT", 0, 0)
     card:SetPoint("RIGHT", panel, "RIGHT", -4, 0)
-    card:SetHeight(122)
-    local h = W.Header(card, "Your status")
+    card:SetHeight(88)
+    ui.card = card
+    local h = W.Header(card, "Your listing")
     h:SetPoint("TOPLEFT", 8, -6)
+    -- small settings, kept apart from the listing itself
+    local badgeCheck = W.Check(card, "Badge", function() return db.badge end, function(v) db.badge = v; updateBadge() end)
+    badgeCheck:SetPoint("TOPRIGHT", card, "TOPRIGHT", -54, -2)
+    badgeCheck.label:SetFontObject(GameFontHighlightSmall)
+    local toasts = W.Check(card, "Alerts", function() return db.toasts end, function(v) db.toasts = v end)
+    toasts:SetPoint("RIGHT", badgeCheck, "LEFT", -40, 0)
+    toasts.tip = "Pop up an alert when someone who fits your listing appears."
+    badgeCheck.tip = "Show a small on-screen badge while you're listed."
+    toasts.label:SetFontObject(GameFontHighlightSmall)
 
     ui.lookingCheck = W.Check(card, "I'm looking", function() return db.looking end, setLooking)
-    ui.lookingCheck:SetPoint("TOPLEFT", 4, -22)
-    local listing = W.Cycle(card, 104, LISTING, function() return db.listing end,
+    ui.lookingCheck:SetPoint("TOPLEFT", 4, -26)
+    local listing = W.Cycle(card, 112, LISTING, function() return db.listing end,
         function(v) db.listing = v; alerted = {}; changed() end, "As: ")
-    listing:SetPoint("TOPLEFT", 112, -22)
-    local roles = { { W.RoleIcon("T") .. " Tank", "tank", 228 }, { W.RoleIcon("H") .. " Healer", "healer", 316 },
-                    { W.RoleIcon("D") .. " DPS", "dps", 416 } }
+    listing:SetPoint("TOPLEFT", 112, -26)
+    listing.tipTitle = "List yourself as a player, or your group as needing players"
+    local rl = W.Label(card, C.dim .. "I can play|r", "GameFontHighlightSmall")
+    rl:SetPoint("LEFT", listing, "RIGHT", 18, 0)
+    local roles = { { W.RoleIcon("T") .. " Tank", "tank", 310 }, { W.RoleIcon("H") .. " Healer", "healer", 390 },
+                    { W.RoleIcon("D") .. " DPS", "dps", 480 } }
     for _, r in ipairs(roles) do
         local key = r[2]
         local c = W.Check(card, r[1], function() return db[key] end, function(v) db[key] = v; changed() end)
-        c:SetPoint("TOPLEFT", r[3], -22)
+        c:SetPoint("TOPLEFT", r[3], -26)
     end
-    local toasts = W.Check(card, "Alerts", function() return db.toasts end, function(v) db.toasts = v end)
-    toasts:SetPoint("TOPLEFT", 500, -22)
-    local badgeCheck = W.Check(card, "Badge", function() return db.badge end, function(v) db.badge = v; updateBadge() end)
-    badgeCheck:SetPoint("TOPLEFT", 576, -22)
 
-    local labels = { { "Activity", 8 }, { "Which / where", 126 }, { "Note", 276 }, { "Spec (blank = auto)", 454 } }
-    for _, l in ipairs(labels) do
-        local fs = W.Label(card, C.dim .. l[1] .. "|r", "GameFontHighlightSmall")
-        fs:SetPoint("TOPLEFT", l[2], -50)
-    end
-    local activity = W.Cycle(card, 110, ACTIVITIES, function() return db.activity end,
-        function(v) db.activity = v; alerted = {}; changed() end)
-    activity:SetPoint("TOPLEFT", 8, -64)
+    local activity = W.Cycle(card, 150, ACTIVITIES, function() return db.activity end,
+        function(v) db.activity = v; alerted = {}; changed() end, "Activity: ")
+    activity:SetPoint("TOPLEFT", 8, -56)
     ui.activity, ui.listing = activity, listing
-    local detail = W.EditBox(card, 140, function(t) db.detail = t:sub(1, 30); changed() end)
-    detail:SetPoint("TOPLEFT", 132, -64)
+    local detail = W.EditBox(card, 150, function(t) db.detail = t:sub(1, 30); changed() end, "Which dungeon or zone")
+    detail:SetPoint("LEFT", activity, "RIGHT", 8, 0)
     detail:SetText(db.detail)
     ui.detail = detail
-    local note = W.EditBox(card, 166, function(t) db.note = t:sub(1, 60); changed() end)
-    note:SetPoint("TOPLEFT", 282, -64)
+    local note = W.EditBox(card, 180, function(t) db.note = t:sub(1, 60); changed() end, "Note for others (optional)")
+    note:SetPoint("LEFT", detail, "RIGHT", 8, 0)
     note:SetText(db.note)
-    local spec = W.EditBox(card, 100, function(t) db.spec = t:sub(1, 20); changed() end)
-    spec:SetPoint("TOPLEFT", 460, -64)
+    local spec = W.EditBox(card, 110, function(t) db.spec = t:sub(1, 20); changed() end, "Spec (auto)")
+    spec:SetPoint("LEFT", note, "RIGHT", 8, 0)
     spec:SetText(db.spec)
 
     -- Group listings: how many of each role the group still needs.
     ui.needRow = CreateFrame("Frame", nil, card)
-    ui.needRow:SetPoint("TOPLEFT", 8, -92)
+    ui.needRow:SetPoint("TOPLEFT", 8, -86)
     ui.needRow:SetSize(560, 24)
     local nl = W.Label(ui.needRow, C.gold .. "Your group needs|r", "GameFontNormalSmall")
     nl:SetPoint("LEFT", 0, 0)
@@ -445,7 +451,7 @@ local function buildPage(panel)
         local key = r[2]
         local icon = W.Label(ui.needRow, W.RoleIcon(r[1], 16))
         icon:SetPoint("LEFT", x, 0)
-        local box = W.EditBox(ui.needRow, 28, function(t) db[key] = math.max(0, math.min(39, tonumber(t) or 0)); changed() end)
+        local box = W.EditBox(ui.needRow, 32, function(t) db[key] = math.max(0, math.min(39, tonumber(t) or 0)); changed() end)
         box:SetPoint("LEFT", x + 20, 0)
         box:SetText(tostring(db[key] or 0))
         ui.need = ui.need or {}
@@ -457,18 +463,21 @@ local function buildPage(panel)
     nh:SetPoint("LEFT", x + 6, 0)
 
     local h2 = W.Header(panel, "Looking now across RUIN")
-    h2:SetPoint("TOPLEFT", 0, -132)
+    h2:SetPoint("TOPLEFT", card, "BOTTOMLEFT", 0, -12)
     ui.count = W.Label(panel, "", "GameFontHighlightSmall")
     ui.count:SetPoint("LEFT", h2, "RIGHT", 10, 0)
     local filt = W.Cycle(panel, 120, FILTERS, function() return filter end,
         function(v) filter = v; refresh() end, "Show: ")
-    filt:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -128)
+    filt:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+    filt:SetPoint("TOP", h2, "TOP", 0, 4)
+    filt.tipTitle = "Which activities to show"
     local lv = W.Cycle(panel, 110, LEVELS, function() return db.levels end,
         function(v) db.levels = v; refresh() end)
     lv:SetPoint("RIGHT", filt, "LEFT", -4, 0)
+    lv.tipTitle = "Show players near your level"
 
     ui.status = W.Label(panel, "", "GameFontHighlightSmall")
-    ui.status:SetPoint("TOPLEFT", 0, -152)
+    ui.status:SetPoint("TOPLEFT", h2, "BOTTOMLEFT", 0, -8)
     ui.status:SetPoint("RIGHT", panel, "RIGHT", -10, 0)
 
     ui.list = W.List(panel, 24, function(row)
@@ -522,7 +531,7 @@ local function buildPage(panel)
         end or nil
     end)
     ui.list:SetEmptyText("Nobody is looking right now. Tick \"I'm looking\" and you'll be the first on the board.")
-    ui.list.frame:SetPoint("TOPLEFT", 0, -170)
+    ui.list.frame:SetPoint("TOPLEFT", ui.status, "BOTTOMLEFT", 0, -6)
     ui.list.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, 0)
 
     panel:SetScript("OnShow", refresh)
