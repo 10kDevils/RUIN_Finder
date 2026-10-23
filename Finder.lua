@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.3.5" })
+local M = R:RegisterModule("Finder", { version = "0.3.6" })
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
 local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
@@ -175,7 +175,7 @@ local function updateStatusLine()
     if not db.looking then
         ui.status:SetText(C.dim .. "You are not listed. Tick \"I'm looking\" to post your listing.|r")
     elseif not R:IsConnected() then
-        ui.status:SetText(C.bad .. "Not connected to the RUIN org channel, so nobody else can see your listing yet. Import the org key on the Options page.|r")
+        ui.status:SetText(C.bad .. "Not connected to the RUIN org channel, so nobody else can see your listing yet. Import the org key on the Settings page.|r")
     else
         ui.status:SetText(C.good .. (isGroup() and "Your group's listing is live across RUIN." or "Your listing is live across RUIN.") .. "|r")
     end
@@ -328,6 +328,122 @@ local function invite(name)
     end
 end
 
+-- Ask a listed group's leader to invite you: they get a prompt with your
+-- role, class and level, and one click invites you.
+local requested = {}       -- leader name -> time
+local function myRoleFor(group)
+    local me = buildBeacon()
+    local r = filledRole(me, group)
+    if r then return r end
+    if db.tank then return "Tank" elseif db.healer then return "Healer" end
+    return "DPS"
+end
+
+local function requestJoin(e)
+    if not R:IsConnected() then return M:Print("Not connected to RUIN yet.") end
+    local now = GetTime()
+    if requested[e.name] and now - requested[e.name] < 60 then
+        return M:Print("You already asked " .. e.name .. " in the last minute.")
+    end
+    requested[e.name] = now
+    local p = R:GetPlayer()
+    M:Send("JOINREQ", { g = p.guid, c = p.class, l = p.level, sp = mySpec(), gu = p.guild, role = myRoleFor(e), a = e.a }, "PEER", e.name)
+    M:Print(("Asked %s to invite you to their group (as %s)."):format(e.name, myRoleFor(e)))
+end
+
+local joinPrompted = {}    -- requester name -> time
+local pendingRoles = {}    -- requester name -> role they asked to join as
+function M:OnJoinRequest(d, sender)
+    if not (db.looking and isGroup()) or type(sender) ~= "string" then return end
+    local now = GetTime()
+    if joinPrompted[sender] and now - joinPrompted[sender] < 60 then return end
+    joinPrompted[sender] = now
+    local role = (d.role == "Tank" or d.role == "Healer") and d.role or "DPS"
+    pendingRoles[R.Util.ShortName(sender)] = role
+    local who = ("%s (%s, level %s%s%s)"):format(W.ClassName(sender, d.c), role, tostring(tonumber(d.l) or "?"),
+        (type(d.sp) == "string" and d.sp ~= "") and (" " .. d.sp) or "", type(d.gu) == "string" and (", " .. d.gu) or "")
+    M:Print(who .. " asks to join your group.")
+    R:Confirm("Request to join", who .. " asks to join your group for " .. tostring(d.a or db.activity) .. ".\n\nInvite them?",
+        function() if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(sender) elseif InviteUnit then InviteUnit(sender) end end)
+end
+
+---------------------------------------------------------------------------
+-- Your group listing keeps count: when someone joins your group, the role
+-- they fill comes off what you still need (and goes back on if they leave).
+-- Their role is what the game says (role check), else what they asked to
+-- join as, else what their Finder listing says, else DPS.
+---------------------------------------------------------------------------
+local members = nil        -- GUID -> name, everyone in your group now
+local filledBy = {}        -- GUID -> "needT" | "needH" | "needD"
+local KEY = { Tank = "needT", Healer = "needH", DPS = "needD", TANK = "needT", HEALER = "needH", DAMAGER = "needD" }
+
+local function groupNow()
+    local now = {}
+    local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+    local raid = IsInRaid and IsInRaid()
+    for i = 1, n do
+        local unit = raid and ("raid" .. i) or ("party" .. i)
+        local guid = UnitGUID and UnitGUID(unit)
+        if guid and guid ~= R:GetPlayerGUID() then now[guid] = { unit = unit, name = UnitName(unit) } end
+    end
+    return now
+end
+
+local function roleOf(guid, m)
+    local assigned = UnitGroupRolesAssigned and UnitGroupRolesAssigned(m.unit)
+    if assigned and KEY[assigned] then return KEY[assigned] end
+    local asked = m.name and pendingRoles[R.Util.ShortName(m.name)]
+    if asked then return KEY[asked] end
+    local e = board[guid]
+    if e then
+        local flags = (e.rt == 1 and 1 or 0) + (e.rh == 1 and 1 or 0) + (e.rd == 1 and 1 or 0)
+        if flags == 1 then return e.rt == 1 and "needT" or (e.rh == 1 and "needH" or "needD") end
+        -- several roles: the one the group needs most
+        for _, k in ipairs({ "needT", "needH", "needD" }) do
+            local flag = k == "needT" and e.rt or (k == "needH" and e.rh or e.rd)
+            if flag == 1 and (db[k] or 0) > 0 then return k end
+        end
+    end
+    return "needD"
+end
+
+local function setNeed(key, v)
+    db[key] = math.max(0, v)
+    if ui.need and ui.need[key] then ui.need[key]:SetText(tostring(db[key])) end
+end
+
+function M.OnGroupChanged()
+    local now = groupNow()
+    if members == nil then members = now; return end      -- first look: who was already here
+    local tracking = db.looking and isGroup()
+    local changedAny = false
+    for guid, m in pairs(now) do
+        if not members[guid] and tracking then
+            local key = roleOf(guid, m)
+            if (db[key] or 0) > 0 then
+                setNeed(key, db[key] - 1)
+                filledBy[guid] = key
+                changedAny = true
+                M:Print(("%s joined as %s; your group still %s."):format(m.name or "Someone",
+                    key == "needT" and "Tank" or (key == "needH" and "Healer" or "DPS"), needText({ qt = db.needT, qh = db.needH, qd = db.needD })))
+            end
+        end
+    end
+    for guid in pairs(members) do
+        if not now[guid] and filledBy[guid] then
+            if tracking then setNeed(filledBy[guid], (db[filledBy[guid]] or 0) + 1); changedAny = true end
+            filledBy[guid] = nil
+        end
+    end
+    members = now
+    if changedAny then
+        if (db.needT or 0) + (db.needH or 0) + (db.needD or 0) == 0 then
+            M:Print("Your group has everyone it needs; the listing shows it as full.")
+        end
+        changed()
+    end
+end
+
 -- Sign up for a Muster event in the first role you're flagged for that is open.
 local function joinEvent(s)
     local mu = R:GetModule("Muster")
@@ -357,7 +473,7 @@ updateBadge = function()
     end
     if not badge then
         badge = W.HudFrame("RUIN_FinderBadge", "Finder", db, "badgePos", { "TOP", UIParent, "TOP", 220, -24 })
-        badge:SetSize(230, 34)
+        badge:SetSize(150, 30)
         badge.icon = badge:CreateTexture(nil, "ARTWORK")
         badge.icon:SetTexture("Interface\\Icons\\INV_Misc_GroupLooking")
         badge.icon:SetSize(22, 22)
@@ -365,7 +481,6 @@ updateBadge = function()
         pcall(badge.icon.SetMask, badge.icon, "Interface\\CharacterFrame\\TempPortraitAlphaMask")
         badge.text = W.Label(badge, "", "GameFontNormalSmall")
         badge.text:SetPoint("LEFT", badge.icon, "RIGHT", 6, 0)
-        badge.text:SetPoint("RIGHT", badge, "RIGHT", -8, 0)
         badge.text:SetWordWrap(false)
         badge:SetScript("OnMouseUp", function(_, mouse)
             if mouse == "RightButton" then setLooking(false) else M:OpenTab() end
@@ -383,6 +498,9 @@ updateBadge = function()
     local what = db.activity .. (db.detail ~= "" and (": " .. db.detail) or "")
     badge.text:SetText((isGroup() and "Group LFM · " or "Looking · ") .. C.white .. what .. "|r"
         .. (m > 0 and ("  " .. C.good .. m .. " match" .. (m == 1 and "" or "es") .. "|r") or ""))
+    -- just as wide as its text (icon, gap, text, margin)
+    local w = (badge.text.GetUnboundedStringWidth and badge.text:GetUnboundedStringWidth()) or badge.text:GetStringWidth() or 100
+    badge:SetWidth(math.floor(7 + 22 + 6 + w + 10 + 0.5))
     badge:Show()
 end
 
@@ -483,11 +601,11 @@ local function buildPage(panel)
     ui.list = W.List(panel, 24, function(row)
         row.text = W.Label(row, "")
         row.text:SetPoint("LEFT", 4, 0)
-        row.text:SetPoint("RIGHT", row, "RIGHT", -132, 0)
+        row.text:SetPoint("RIGHT", row, "RIGHT", -170, 0)
         row.text:SetWordWrap(false)
         row.inv = W.Button(row, "Invite", 58)
         row.inv:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        row.wsp = W.Button(row, "Whisper", 66)
+        row.wsp = W.Button(row, "Ask", 52)
         row.wsp:SetPoint("RIGHT", row.inv, "LEFT", -2, 0)
     end, function(row, e)
         if e.muster then
@@ -499,6 +617,7 @@ local function buildPage(panel)
             row.text:SetText(("%sMuster|r  %s%s|r  %s  %s%s|r  needs %s"):format("|cffd9622b", C.white, s.title, s.kind or "",
                 C.gold, date("%a %H:%M", s.at), table.concat(open, " ")))
             row.wsp:SetText("Sign up")
+            row.wsp:SetWidth(66)
             row.wsp:Show()
             row.inv:Hide()
             row.wsp:SetScript("OnClick", function() joinEvent(s) end)
@@ -508,7 +627,11 @@ local function buildPage(panel)
             end
             return
         end
-        row.wsp:SetText(e.lt == "G" and "Ask" or "Whisper")
+        -- Ask (whisper) on every row; Invite for players, Request to join for groups
+        row.wsp:SetText("Ask")
+        row.wsp:SetWidth(52)
+        row.inv:SetText(e.lt == "G" and "Request to join" or "Invite")
+        row.inv:SetWidth(e.lt == "G" and 112 or 58)
         local where = e.d ~= "" and (": " .. e.d) or ""
         local note = e.nt ~= "" and (C.dim .. " · " .. e.nt .. "|r") or ""
         local tag = e.self and (C.good .. "You:|r ") or (e.match and (C.good .. "Match|r ") or "")
@@ -520,9 +643,12 @@ local function buildPage(panel)
                 C.dim, tonumber(e.l) or 0, e.sp or "", C.gold, e.a, where, note, C.dim, e.gu and (" · " .. e.gu) or ""))
         end
         row.wsp:SetShown(not e.self)
-        row.inv:SetShown(not e.self and e.lt ~= "G")
+        row.inv:SetShown(not e.self)
         row.wsp:SetScript("OnClick", function() whisper(e.name) end)
-        row.inv:SetScript("OnClick", function() invite(e.name) end)
+        row.inv:SetScript("OnClick", function() if e.lt == "G" then requestJoin(e) else invite(e.name) end end)
+        row.wsp.tip = "Whisper " .. tostring(e.name)
+        row.inv.tip = e.lt == "G" and "Ask the group's leader to invite you; they get a prompt with your role, class and level"
+            or ("Invite " .. tostring(e.name) .. " to your group")
         row.tip = (not e.self) and function(tip)
             tip:AddLine(W.ClassName(e.name, e.c), 1, 1, 1)
             tip:AddLine(("Level %d %s  ·  %s"):format(tonumber(e.l) or 0, e.sp or "", e.gu or "?"), 0.8, 0.8, 0.8)
@@ -548,6 +674,9 @@ function M:OnEnable()
 
     self:Listen("BEACON", "OnBeacon")
     self:Listen("ASK", "OnAsk")
+    self:Listen("JOINREQ", "OnJoinRequest")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", function() M.OnGroupChanged() end)
+    C_Timer.After(3, function() M.OnGroupChanged() end)
     self:AddTab("Finder", buildPage)
     R:Subscribe("Muster:EVENTS", function() refresh() end)
 

@@ -2,7 +2,7 @@
 ## Title: |cffe6b862RUIN|r Finder
 ## Notes: Org-wide Looking For Group board for every RUIN guild.
 ## Author: RUIN
-## Version: 0.3.5
+## Version: 0.3.6
 ## Dependencies: RUIN_Core
 ## SavedVariablesPerCharacter: RUIN_FinderCharDB
 ## IconTexture: Interface\Icons\INV_Misc_GroupLooking

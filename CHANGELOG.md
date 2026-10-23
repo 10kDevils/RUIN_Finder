@@ -6,6 +6,14 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.6 — 2026-10-23
+
+3 changes since 0.3.5:
+
+1. **Ask, Invite and Request to join.** Every row has *Ask* (whisper); players also have *Invite*, groups *Request to join*: the group's leader gets a prompt with your role, class and level and invites you with one click.
+2. **Your group listing keeps count.** When someone joins your group, the role they fill comes off what the group still needs (and goes back on if they leave): the game's role for them, else the role they asked to join as, else their Finder listing's, else DPS. Finder says when the group is full.
+3. The on-screen badge is only as wide as its text.
+
 ## 0.3.5 — 2026-10-19
 
 1 change since 0.3.4 (needs RUIN Core 0.3.12):

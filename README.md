@@ -7,12 +7,12 @@ Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or late
 ## The experience
 - **Where it lives:** the Finder tab in the RUIN window, `/finder`, two key bindings (open, and toggle "I'm looking"), and a small on-screen badge while you're listed.
 - **Look as a player:** tick *I'm looking*, pick your roles and an activity (Dungeon, Raid, PvP, Questing, Professions, Social), optionally say which dungeon or zone and add a note. You appear on everyone's board within a couple of seconds.
-- **List your group:** switch *As: Player* to *As: Group* and set how many tanks, healers and DPS you still need. The board shows "Group of 3 · needs 1 healer".
+- **List your group:** switch *As: Player* to *As: Group* and set how many tanks, healers and DPS you still need. The board shows "Group of 3 · needs 1 healer". When someone joins your group, the role they fill comes off what you still need (and goes back on if they leave): the role the game shows for them, else the role they asked to join as, else their Finder listing's role, else DPS.
 - **Matching:** a player who can fill a role a group of the same activity needs is a *match*. Both sides get an alert, matches sort to the top of the board, and the badge counts them.
-- **Finding people:** whisper or invite anyone in one click. Filter by activity and by level range (within 3, 5 or 10 levels of you). Hover a row for zone and guild.
+- **Finding people:** every row has *Ask* (whisper). Players have *Invite*; groups have *Request to join*, which sends the group's leader a prompt with your role, class and level, and one click invites you. Filter by activity and by level range (within 3, 5 or 10 levels of you). Hover a row for zone and guild.
 - **Muster events:** upcoming RUIN events with open slots are listed on the board with a *Sign up* button that uses the first role you ticked that is open.
 - **From a sighting:** RUIN Muster's sightings (boss, rare, enemy group) have a *Find group* button that fills in your listing as a group for that activity and turns *I'm looking* on.
-- **Badge:** left-click opens Finder, right-click stops looking, drag to move. Turn it off with the Badge box or `/finder badge`.
+- **Badge:** just as wide as its text; left-click opens Finder, right-click stops looking, drag to move. Turn it off with the Badge box or `/finder badge`.
 - **Quick commands:** `/finder on dungeon`, `/finder group dungeon`, `/finder off`, `/finder badge`.
 
 ## What it shares with RUIN
