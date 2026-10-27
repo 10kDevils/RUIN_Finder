@@ -1,12 +1,16 @@
 ## Interface: 16001, 120105
 ## Title: |cffe6b862RUIN|r Finder
-## Notes: Org-wide Looking For Group board for every RUIN guild.
+## Notes: Org-wide Looking For Group board for every RUIN guild, where members are, layers and hops, and world boss and buff timers.
 ## Author: RUIN
-## Version: 0.4.0
+## Version: 0.4.1
 ## Dependencies: RUIN_Core
+## SavedVariables: RUIN_FinderDB
 ## SavedVariablesPerCharacter: RUIN_FinderCharDB
 ## IconTexture: Interface\Icons\INV_Misc_GroupLooking
 ## X-Category: Guild
 ## Category: RUIN Gaming Companion App
 
+Timers.lua
+Where.lua
+Layers.lua
 Finder.lua

@@ -6,6 +6,16 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.1 — 2026-10-27
+
+Finder has sub-tabs now: Board, Where, Layers and Timers (Where and Layers need RUIN Core 0.4.3).
+
+1. **Where the members are.** Online members of every RUIN guild by continent and zone (only zones, never exact positions), with the names in each zone and a whisper button, and a pin on each zone of the world map with how many are there.
+2. **Layer detection.** Finder works out your layer from the creatures around you (two different creatures must agree for a few seconds, so a pet or a stray creature doesn't fool it) and shares only zone and layer; the Layers tab shows who is on which layer of each zone.
+3. **Layer hop.** *Ask for a hop* and a member on another layer of your zone invites you (or does it automatically if they ticked *Help hops automatically*); RUIN accepts that invite for you, and once you've arrived *Leave group* (or `/finder leave`) leaves. `/finder hop` asks too.
+4. **Member marks.** Players from the org's guilds get a small RUIN mark on their nameplate, and their guild tag shows under your target frame. Turn it off on the Where tab.
+5. **Timers moved here from Muster.** World bosses and world buffs (Now, Announce, a warning a minute before a buff drops) are on Finder → Timers, with your old timers brought over. They still travel the way Muster sent them, so members on older Muster versions keep seeing them. `/finder timer songflower 5`; `/muster timer` still works.
+
 ## 0.4.0 — 2026-10-23 · Beta 1
 
 The RUIN Gaming Companion App enters beta: every addon is now 0.4.0. Nothing changed since 0.3.6 apart from the version number. Report what you find under Settings → Feedback.

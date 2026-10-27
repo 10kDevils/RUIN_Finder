@@ -13,7 +13,8 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.4.0" })
+local M = R:RegisterModule("Finder", { version = "0.4.1" })
+ns.Finder = M
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
 local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
@@ -268,7 +269,8 @@ function M:OnBeacon(d, sender)
 end
 
 -- Someone just came online and wants the current board.
-function M:OnAsk()
+function M:OnAsk(_, sender)
+    if ns.Timers and sender then ns.Timers.Share() end
     if not db.looking then return end
     C_Timer.After(1 + math.random() * 5, sendBeacon)
 end
@@ -507,7 +509,7 @@ end
 ---------------------------------------------------------------------------
 -- Page
 ---------------------------------------------------------------------------
-local function buildPage(panel)
+local function buildBoard(panel)
     ui.panel = panel
     -- Your listing: what you want, then (for groups) who you still need.
     local card = W.Card(panel)
@@ -664,6 +666,36 @@ local function buildPage(panel)
     refresh()
 end
 
+-- Finder's page: Board (the LFG board), Where (members by zone, marks),
+-- Layers (layers and hops) and Timers (world bosses and buffs). Where and
+-- Layers need RUIN Core 0.4.3.
+local function buildPage(panel)
+    local names = { "Board" }
+    if ns.Where then names[#names + 1] = "Where" end
+    if ns.Layers then names[#names + 1] = "Layers" end
+    names[#names + 1] = "Timers"
+    ui.tabs = W.SubTabs(panel, names, function(_, name)
+        if name == "Where" then ns.Where.Refresh()
+        elseif name == "Layers" then ns.Layers.Refresh()
+        elseif name == "Timers" then ns.Timers.Refresh()
+        else refresh() end
+    end)
+    for i, name in ipairs(names) do
+        local page = ui.tabs.pages[i]
+        if name == "Board" then buildBoard(page)
+        elseif name == "Where" then ns.Where.Build(page)
+        elseif name == "Layers" then ns.Layers.Build(page)
+        else ns.Timers.Build(page) end
+    end
+    ui.tabNames = names
+    ui.tabs:Select(1)
+end
+
+function M:SelectSubTab(name)
+    if not ui.tabs then return end
+    for i, n in ipairs(ui.tabNames) do if n:lower() == tostring(name):lower() then ui.tabs:Select(i) end end
+end
+
 ---------------------------------------------------------------------------
 -- Setup
 ---------------------------------------------------------------------------
@@ -671,6 +703,10 @@ function M:OnEnable()
     if type(RUIN_FinderCharDB) ~= "table" then RUIN_FinderCharDB = {} end
     db = RUIN_FinderCharDB
     for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+    if type(RUIN_FinderDB) ~= "table" then RUIN_FinderDB = {} end
+    ns.Timers.Init(self, RUIN_FinderDB)
+    if ns.Where then ns.Where.Init(self, db) end
+    if ns.Layers then ns.Layers.Init(self, db) end
 
     self:Listen("BEACON", "OnBeacon")
     self:Listen("ASK", "OnAsk")
@@ -713,6 +749,7 @@ BINDING_NAME_RUIN_FINDER_TOGGLE = "Toggle 'I'm looking'"
 -- /finder on [activity]      look as a player
 -- /finder group [activity]   list your group (set needed roles on the page)
 -- /finder off | badge
+-- /finder timer <name> [minutes] | where | layers | hop | leave
 SLASH_RUINFINDER1 = "/finder"
 SlashCmdList.RUINFINDER = function(msg)
     msg = (msg or ""):lower()
@@ -725,6 +762,23 @@ SlashCmdList.RUINFINDER = function(msg)
         end
         if cmd ~= "off" then db.listing = (cmd == "group") and "Group" or "Player" end
         setLooking(cmd ~= "off")
+    elseif cmd == "timer" or cmd == "timers" then
+        local key, mins = rest:match("^(%S+)%s*(%d*)")
+        if key and ns.Timers.BY[key] then
+            ns.Timers.Set(key, tonumber(mins))
+        else
+            local keys = {}
+            for _, t in ipairs(ns.Timers.LIST) do keys[#keys + 1] = t.key end
+            M:Print("Timers: " .. table.concat(keys, ", ") .. "  (/finder timer songflower 5)")
+            M:OpenTab(); M:SelectSubTab("Timers")
+        end
+    elseif cmd == "where" or cmd == "layers" then
+        M:OpenTab(); M:SelectSubTab(cmd)
+    elseif cmd == "hop" and ns.Layers then
+        local ok, err = ns.Layers.AskHop()
+        M:Print(ok and "Asked the members on other layers of this zone." or err)
+    elseif cmd == "leave" and ns.Layers then
+        ns.Layers.Leave()
     elseif cmd == "badge" then
         db.badge = not db.badge
         updateBadge()
