@@ -2,7 +2,7 @@
 ## Title: |cffe6b862RUIN|r Finder
 ## Notes: Org-wide Looking For Group board for every RUIN guild, where members are, layers and hops, and world boss and buff timers.
 ## Author: RUIN
-## Version: 0.4.1
+## Version: 0.4.2
 ## Dependencies: RUIN_Core
 ## SavedVariables: RUIN_FinderDB
 ## SavedVariablesPerCharacter: RUIN_FinderCharDB

@@ -247,6 +247,10 @@ end
 
 function M:OnBeacon(d, sender)
     if type(d.g) ~= "string" or d.g == R:GetPlayerGUID() then return end
+    -- a listing is its sender's own: their GUID, and nobody else's listing replaced
+    if R.GUIDMatches and not R:GUIDMatches(sender, d.g) then return end
+    local had = board[d.g]
+    if had and R.SameName and not R:SameName(had.name, sender) and GetTime() - (had.t or 0) < 600 then return end
     if d.on ~= 1 then
         if board[d.g] then board[d.g] = nil; refresh() end
         return

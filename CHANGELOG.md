@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.2 — 2026-10-28
+
+Security update (works best with RUIN Core 0.4.5). 1 change since 0.4.1:
+
+1. A listing on the board is its sender's own (nobody replaces someone else's), only a member who shared a different layer of your zone can be the one whose hop invite RUIN accepts for you, and boss and buff timers dated in the future are refused.
+
 ## 0.4.1 — 2026-10-27
 
 Finder has sub-tabs now: Board, Where, Layers and Timers (Where and Layers need RUIN Core 0.4.3).

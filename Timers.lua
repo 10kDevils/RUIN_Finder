@@ -66,6 +66,9 @@ function Timers.OnTimer(d, sender)
     lastHeard = GetTime()
     local t = TIMER[d.k]
     if not t or not tonumber(d.t) then return end
+    -- times from another client: never in the future, plans at most a week out
+    if R.SaneTime and not R:SaneTime(d.t) then return end
+    if d.p ~= nil and (not tonumber(d.p) or tonumber(d.p) > now() + 7 * 86400) then return end
     local rec = db.timers[d.k] or {}
     if (rec.t or 0) >= tonumber(d.t) then return end
     local newPlan, wasPlan = tonumber(d.p), rec.plan

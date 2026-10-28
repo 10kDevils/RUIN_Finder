@@ -187,7 +187,11 @@ local function onHopTaken(_, d, sender)
     if type(d) ~= "table" or type(d.n) ~= "string" then return end
     offers[d.n] = nil
     local me = R:GetPlayer()
-    if hop and norm(d.n) == norm(me.name) and GetTime() - hop.at < HOP_WAIT then
+    -- only a member who shared a different layer of this zone can be the helper
+    -- (RUIN accepts that one's invite for you)
+    local p = peers[sender]
+    local couldHelp = p and hop and p.zone == hop.zone and p.layer ~= hop.from and GetTime() - p.t <= KEEP
+    if hop and couldHelp and norm(d.n) == norm(me.name) and GetTime() - hop.at < HOP_WAIT then
         hop.helper = sender
         M:Print(("%s is inviting you for a hop; RUIN accepts it for you."):format(R.Util.ShortName(sender)))
     end
