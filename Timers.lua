@@ -61,6 +61,9 @@ function Timers.Set(key, minutesFromNow)
     return true
 end
 
+-- when a timer was last heard from anyone (the catch-up share waits for it)
+local lastHeard = -999
+
 function Timers.OnTimer(d, sender)
     if type(d) ~= "table" or type(d.k) ~= "string" then return end
     lastHeard = GetTime()
@@ -86,7 +89,7 @@ end
 
 -- Someone just connected (Finder's ASK): one member shares what they know.
 -- Each waits a random moment and stays quiet if another already answered.
-local lastHeard, sharePending = -999, false
+local sharePending = false
 function Timers.Share()
     if sharePending then return end
     sharePending = true

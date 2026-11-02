@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.3 — 2026-11-01
+
+1 change since 0.4.2:
+
+1. **Timer catch-up fixed.** When a timer arrived from someone else, Finder noted it in a stray global instead of its own variable, so after you logged in it could share its timers even though someone had already answered. It now sees the answer and stays quiet.
+
 ## 0.4.2 — 2026-10-28
 
 Security update (works best with RUIN Core 0.4.5). 1 change since 0.4.1:
