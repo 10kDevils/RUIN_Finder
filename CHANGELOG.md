@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.5.0 — 2026-11-02
+
+RUIN 0.5.0: every addon in the suite moves to 0.5.0 together. Includes the quieter timer catch-up (0.4.3) and the RUIN emblem on members and map pins (0.4.4).
+
 ## 0.4.4 — 2026-11-02
 
 1 change since 0.4.3:
