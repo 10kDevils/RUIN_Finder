@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.4 — 2026-11-02
+
+1 change since 0.4.3:
+
+1. **RUIN emblem on members.** The mark over RUIN members' nameplates, the target badge and the Where map pins use the official RUIN emblem (with RUIN Core 0.4.9 or later; older Cores keep the banner icon).
+
 ## 0.4.3 — 2026-11-01
 
 1 change since 0.4.2:

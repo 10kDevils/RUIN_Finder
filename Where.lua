@@ -16,7 +16,8 @@ local Where = {}
 ns.Where = Where
 
 local PIN_OWNER = "FinderWhere"
-local MARK_TEX = "Interface\\Icons\\INV_Banner_03"
+-- the RUIN emblem (RUIN Core 0.4.9+), or the old banner icon with an older Core
+local MARK_TEX = (R.Brand and R.Brand.ICON) or "Interface\\Icons\\INV_Banner_03"
 local M, db
 local ui = {}
 
