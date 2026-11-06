@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.5.1 — 2026-11-06
+
+- Where: the census mark on a zone's own map sits in the top-left corner with the member count beside it ("3 RUIN"), since it counts the zone rather than marking a place. On continent and world maps the marks stay on each zone. The mark is now the winged R alone, with no box, disc or ring (needs RUIN Core 0.5.3; older Cores keep the round emblem).
+
 ## 0.5.0 — 2026-11-02
 
 RUIN 0.5.0: every addon in the suite moves to 0.5.0 together. Includes the quieter timer catch-up (0.4.3) and the RUIN emblem on members and map pins (0.4.4).

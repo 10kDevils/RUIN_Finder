@@ -44,7 +44,14 @@ function Where.UpdatePins()
             local gs = {}
             for g, n in pairs(z.guilds) do gs[#gs + 1] = g .. " " .. n end
             table.sort(gs)
-            R.Map:SetPin(PIN_OWNER, z.zone, { map = id, x = 0.5, y = 0.5, icon = MARK_TEX, color = { 0.33, 0.72, 0.85 },
+            -- the winged R alone; on the zone's own map it sits in the corner
+            -- (a count for the zone, not a place), on a continent on the zone
+            local B = R.Brand
+            local plain = B and B.MARK ~= nil
+            R.Map:SetPin(PIN_OWNER, z.zone, { map = id, x = 0.5, y = 0.5, color = { 0.33, 0.72, 0.85 },
+                icon = plain and B.MARK or MARK_TEX, plain = plain, iconCoords = plain and B.markCoords or nil,
+                aspect = plain and B.markAspect or nil, corner = true,
+                label = ("%d RUIN"):format(z.count),
                 title = ("%d RUIN member%s"):format(z.count, z.count == 1 and "" or "s"), text = z.zone .. ": " .. table.concat(gs, ", "),
                 minimap = false, worldmap = true })
         end
