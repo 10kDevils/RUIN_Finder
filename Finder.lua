@@ -488,8 +488,10 @@ updateBadge = function()
         badge.text = W.Label(badge, "", "GameFontNormalSmall")
         badge.text:SetPoint("LEFT", badge.icon, "RIGHT", 6, 0)
         badge.text:SetWordWrap(false)
-        badge:SetScript("OnMouseUp", function(_, mouse)
-            if mouse == "RightButton" then setLooking(false) else M:OpenTab() end
+        badge:SetScript("OnMouseUp", function(self, mouse)
+            if mouse == "RightButton" then setLooking(false); return end
+            if self.StopMove then self:StopMove() end
+            if not self.justMoved then M:OpenTab() end       -- a drag moves it; only a click opens Finder
         end)
         badge:SetScript("OnEnter", function(self)
             if not GameTooltip then return end
