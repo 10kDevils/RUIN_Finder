@@ -8,6 +8,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## 0.5.1 — 2026-11-06
 
+- Where: on continent and world maps, click a census mark to open that zone's map; the marks are smaller there so they cover less of the zone (needs RUIN Core 0.5.3).
 - Board: *Sign up* on a Muster event wears Muster's orange.
 - Where: the census mark on a zone's own map sits in the top-left corner with the member count beside it ("3 RUIN"), since it counts the zone rather than marking a place. On continent and world maps the marks stay on each zone. The mark is now the winged R alone, with no box, disc or ring (needs RUIN Core 0.5.3; older Cores keep the round emblem).
 
