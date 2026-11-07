@@ -624,6 +624,7 @@ local function buildBoard(panel)
                 C.gold, date("%a %H:%M", s.at), table.concat(open, " ")))
             row.wsp:SetText("Sign up")
             row.wsp:SetWidth(66)
+            if W.LinkTo then W.LinkTo(row.wsp, "Muster") end
             row.wsp:Show()
             row.inv:Hide()
             row.wsp:SetScript("OnClick", function() joinEvent(s) end)
@@ -636,6 +637,7 @@ local function buildBoard(panel)
         -- Ask (whisper) on every row; Invite for players, Request to join for groups
         row.wsp:SetText("Ask")
         row.wsp:SetWidth(52)
+        if W.LinkTo then W.LinkTo(row.wsp, nil) end
         row.inv:SetText(e.lt == "G" and "Request to join" or "Invite")
         row.inv:SetWidth(e.lt == "G" and 112 or 58)
         local where = e.d ~= "" and (": " .. e.d) or ""
