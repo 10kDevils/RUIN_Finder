@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.6.0 — 2026-11-11
+
+- Released with the RUIN Gaming Companion App 0.6.0; no changes to Finder itself.
+
 ## 0.5.1 — 2026-11-06
 
 - The looking-for-group badge moves as soon as you press on it; dragging it no longer opens Finder (a click still does).
