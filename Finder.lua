@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.6.1" })
+local M = R:RegisterModule("Finder", { version = "0.7.0" })
 ns.Finder = M
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }

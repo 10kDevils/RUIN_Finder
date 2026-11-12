@@ -6,7 +6,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
-## 0.6.1 — 2026-11-12
+## 0.7.0 — 2026-11-12
 
 - **A new look, with the rest of the suite.** Finder's pages take its rose through and through: the open tab's underline, check marks, the bar on a row under the mouse and the edge a button gets when you point at it. Its header carries a drawing of players found across a web of others, the ones you found lighting up in turn, and Finder has its own icon (a magnifying glass) on its tab, its header and in the AddOns list.
 
