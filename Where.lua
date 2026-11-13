@@ -87,7 +87,7 @@ function Where.Build(page)
         local keys = {}
         for _, sp in ipairs(TAG_SPOTS) do keys[#keys + 1] = sp.key end
         return keys
-    end, function() return db.tagAnchor or "below" end, function(v) Where.SetTagSpot(v) end)
+    end, function() return db.tagAnchor or "right" end, function(v) Where.SetTagSpot(v) end)
     ui.tagSpot.format = function(v) return "Tag: " .. ((TAG_BY[v] and TAG_BY[v].label) or v) end
     ui.tagSpot:SetPoint("TOPRIGHT", page, "TOPRIGHT", -112, -1)
     ui.tagSpot.tip = "Which side or corner of the target frame the guild tag sits on. Picking one puts it back on that spot."
@@ -201,7 +201,7 @@ end
 
 local targetBadge
 local tagUnlocked = false
-local function tagSpot() return TAG_BY[db.tagAnchor or "below"] or TAG_BY.below end
+local function tagSpot() return TAG_BY[db.tagAnchor or "right"] or TAG_BY.right end
 local function placeTag()
     if not targetBadge then return end
     local sp = tagSpot()
@@ -308,7 +308,12 @@ end
 function Where.Init(module, cdb)
     M, db = module, cdb
     if db.marks == nil then db.marks = true end
-    if db.tagAnchor == nil then db.tagAnchor = "below" end
+    if db.tagAnchor == nil then db.tagAnchor = "right" end
+    -- 0.7.1 builds started the tag below the frame: move an untouched one to the right side once
+    if not db.tagRight then
+        if db.tagAnchor == "below" and (db.tagX or 0) == 0 and (db.tagY or 0) == 0 then db.tagAnchor = "right" end
+        db.tagRight = true
+    end
     if db.wherePins == nil then db.wherePins = true end
     loadGuilds()
     R:Subscribe("KEY_CHANGED", function() loadGuilds(); Where.RefreshMarks() end)

@@ -8,7 +8,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## 0.7.1 — 2026-11-12
 
-- **Where the guild tag sits by your target frame is up to you** (Finder > Where): pick a side or corner (below, below left or right, above, above left or right, left or right side), or press **Move tag** to drag it anywhere around the frame (it shows a sample until you target a member) and press **Lock tag** when done. Picking a spot puts it back there. Also /finder tag <spot>, /finder tag move, /finder tag lock. The Where page's header is rearranged to fit the new controls.
+- **Where the guild tag sits by your target frame is up to you** (Finder > Where): pick a side or corner (below, below left or right, above, above left or right, left or right side), or press **Move tag** to drag it anywhere around the frame (it shows a sample until you target a member) and press **Lock tag** when done. Picking a spot puts it back there. Also /finder tag <spot>, /finder tag move, /finder tag lock. It starts on the right side of the frame. The Where page's header is rearranged to fit the new controls.
 
 ## 0.7.0 — 2026-11-12
 
