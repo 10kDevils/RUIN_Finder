@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.7.2" })
+local M = R:RegisterModule("Finder", { version = "0.7.1" })
 ns.Finder = M
 M.UI = nil      -- set once the page is built (tests look at it)
 
