@@ -20,6 +20,20 @@ local PIN_OWNER = "FinderWhere"
 local MARK_TEX = (R.Brand and R.Brand.ICON) or "Interface\\Icons\\INV_Banner_03"
 local M, db
 local ui = {}
+-- the spots by the target frame the guild tag can sit on (see markTarget)
+local TAG_SPOTS = {
+    { key = "below",       label = "Below",          pt = "TOP",         rel = "BOTTOM",      x = 20, y = 6 },
+    { key = "belowleft",   label = "Below, left",    pt = "TOPLEFT",     rel = "BOTTOMLEFT",  x = 6,  y = 6 },
+    { key = "belowright",  label = "Below, right",   pt = "TOPRIGHT",    rel = "BOTTOMRIGHT", x = -6, y = 6 },
+    { key = "above",       label = "Above",          pt = "BOTTOM",      rel = "TOP",         x = 0,  y = -4 },
+    { key = "aboveleft",   label = "Above, left",    pt = "BOTTOMLEFT",  rel = "TOPLEFT",     x = 6,  y = -4 },
+    { key = "aboveright",  label = "Above, right",   pt = "BOTTOMRIGHT", rel = "TOPRIGHT",    x = -6, y = -4 },
+    { key = "left",        label = "Left side",      pt = "RIGHT",       rel = "LEFT",        x = 2,  y = 0 },
+    { key = "right",       label = "Right side",     pt = "LEFT",        rel = "RIGHT",       x = -2, y = 0 },
+}
+local TAG_BY = {}
+for _, sp in ipairs(TAG_SPOTS) do TAG_BY[sp.key] = sp end
+Where.TAG_SPOTS = TAG_SPOTS
 
 ---------------------------------------------------------------------------
 -- Where
@@ -63,12 +77,25 @@ function Where.Build(page)
     ui.total = W.Label(page, "", "GameFontHighlight")
     ui.total:SetPoint("TOPLEFT", 2, -4)
     ui.pins = W.Check(page, "Map pins", function() return db.wherePins end, function(v) db.wherePins = v; Where.UpdatePins() end)
-    ui.pins:SetPoint("TOPLEFT", page, "TOPRIGHT", -330, -1)
+    ui.pins:SetPoint("TOPLEFT", page, "TOPRIGHT", -330, -25)
     ui.pins.tip = "A pin on each zone of the world map with how many members are there."
     ui.marks = W.Check(page, "Member marks", function() return db.marks end, function(v) db.marks = v; Where.RefreshMarks() end)
-    ui.marks:SetPoint("TOPLEFT", page, "TOPRIGHT", -200, -1)
-    ui.marks.tip = "A RUIN mark on org members' nameplates and their guild tag under your target frame."
-    ui.sub = W.Label(page, C.dim .. "Online members of every RUIN guild by zone. Only zones are known: nobody's exact position is shared.|r", "GameFontHighlightSmall")
+    ui.marks:SetPoint("TOPLEFT", page, "TOPRIGHT", -200, -25)
+    ui.marks.tip = "A RUIN mark on org members' nameplates and their guild tag by your target frame."
+    -- where the tag sits by the target frame
+    ui.tagSpot = W.Dropdown(page, 150, function()
+        local keys = {}
+        for _, sp in ipairs(TAG_SPOTS) do keys[#keys + 1] = sp.key end
+        return keys
+    end, function() return db.tagAnchor or "below" end, function(v) Where.SetTagSpot(v) end)
+    ui.tagSpot.format = function(v) return "Tag: " .. ((TAG_BY[v] and TAG_BY[v].label) or v) end
+    ui.tagSpot:SetPoint("TOPRIGHT", page, "TOPRIGHT", -112, -1)
+    ui.tagSpot.tip = "Which side or corner of the target frame the guild tag sits on. Picking one puts it back on that spot."
+    if ui.tagSpot.Refresh then ui.tagSpot:Refresh() end
+    ui.moveTag = W.Button(page, "Move tag", 104, function() Where.UnlockTag(not tagUnlocked) end)
+    ui.moveTag:SetPoint("LEFT", ui.tagSpot, "RIGHT", 6, 0)
+    ui.moveTag.tip = "Unlock the tag to drag it anywhere around the target frame (it shows a sample until you target a member). Click again to lock it."
+    ui.sub = W.Label(page, C.dim .. "Online members of every RUIN guild by zone. Only zones are shared, never positions.|r", "GameFontHighlightSmall")
     ui.sub:SetPoint("TOPLEFT", 2, -28)
 
     ui.zones = W.List(page, 22, function(row)
@@ -87,7 +114,7 @@ function Where.Build(page)
             row.b:SetText(tostring(e.count))
         end
     end)
-    ui.zones.frame:SetPoint("TOPLEFT", 0, -48)
+    ui.zones.frame:SetPoint("TOPLEFT", 0, -54)
     ui.zones.frame:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
     ui.zones.frame:SetWidth(290)
 
@@ -168,28 +195,104 @@ local function markPlate(unit)
     end
 end
 
+-- The guild tag by the target frame. Where it sits is up to you: one of the
+-- frame's sides or corners (db.tagAnchor), nudged by dragging it while it's
+-- unlocked (db.tagX, db.tagY). Finder > Where > Tag, or /finder tag.
+
 local targetBadge
+local tagUnlocked = false
+local function tagSpot() return TAG_BY[db.tagAnchor or "below"] or TAG_BY.below end
+local function placeTag()
+    if not targetBadge then return end
+    local sp = tagSpot()
+    local parent = targetBadge.anchorTo
+    targetBadge:ClearAllPoints()
+    targetBadge:SetPoint(sp.pt, parent, sp.rel, sp.x + (db.tagX or 0), sp.y + (db.tagY or 0))
+end
+-- a frame's point (TOP, BOTTOMLEFT...) in screen coordinates
+local function pointOf(f, pt)
+    local l, r, t, b = f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom()
+    if not (l and r and t and b) then return nil end
+    local x = pt:find("LEFT") and l or pt:find("RIGHT") and r or (l + r) / 2
+    local y = pt:find("TOP") and t or pt:find("BOTTOM") and b or (t + b) / 2
+    return x, y
+end
+local function buildBadge()
+    if targetBadge then return targetBadge end
+    local parent = TargetFrame or UIParent
+    targetBadge = CreateFrame("Frame", nil, parent)
+    targetBadge.anchorTo = parent
+    targetBadge:SetSize(140, 16)
+    targetBadge.icon = targetBadge:CreateTexture(nil, "ARTWORK")
+    targetBadge.icon:SetSize(14, 14)
+    targetBadge.icon:SetPoint("LEFT", 0, 0)
+    targetBadge.icon:SetTexture(MARK_TEX)
+    targetBadge.text = W.Label(targetBadge, "", "GameFontHighlightSmall")
+    targetBadge.text:SetPoint("LEFT", targetBadge.icon, "RIGHT", 4, 0)
+    -- unlocked: an outline shows it can be dragged; dropping it keeps the offset
+    targetBadge.outline = CreateFrame("Frame", nil, targetBadge)
+    targetBadge.outline:SetPoint("TOPLEFT", -3, 3)
+    targetBadge.outline:SetPoint("BOTTOMRIGHT", 3, -3)
+    W.Skin(targetBadge.outline, "bg", 0.55, W.SchemeOf(targetBadge).accent)
+    targetBadge.outline:SetFrameLevel(math.max(0, targetBadge:GetFrameLevel() - 1))
+    targetBadge.outline:Hide()
+    targetBadge:SetMovable(true)
+    targetBadge:SetClampedToScreen(true)
+    targetBadge:RegisterForDrag("LeftButton")
+    targetBadge:SetScript("OnDragStart", function(self) if tagUnlocked then self:StartMoving() end end)
+    targetBadge:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local sp = tagSpot()
+        local bx, by = pointOf(self, sp.pt)
+        local px, py = pointOf(self.anchorTo, sp.rel)
+        if bx and px then
+            local sc = (self:GetEffectiveScale() or 1) / ((self.anchorTo.GetEffectiveScale and self.anchorTo:GetEffectiveScale()) or 1)
+            db.tagX = math.floor((bx - px) * sc - sp.x + 0.5)
+            db.tagY = math.floor((by - py) * sc - sp.y + 0.5)
+        end
+        placeTag()
+    end)
+    targetBadge:SetScript("OnEnter", function(self)
+        if tagUnlocked and GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine("Drag the tag where you want it. Finder > Where > Lock tag when done.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+    targetBadge:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    placeTag()
+    return targetBadge
+end
 local function markTarget()
-    if not targetBadge then
-        local parent = TargetFrame or UIParent
-        targetBadge = CreateFrame("Frame", nil, parent)
-        targetBadge:SetSize(140, 16)
-        targetBadge:SetPoint("TOP", parent, "BOTTOM", 20, 6)
-        targetBadge.icon = targetBadge:CreateTexture(nil, "ARTWORK")
-        targetBadge.icon:SetSize(14, 14)
-        targetBadge.icon:SetPoint("LEFT", 0, 0)
-        targetBadge.icon:SetTexture(MARK_TEX)
-        targetBadge.text = W.Label(targetBadge, "", "GameFontHighlightSmall")
-        targetBadge.text:SetPoint("LEFT", targetBadge.icon, "RIGHT", 4, 0)
-    end
+    buildBadge()
     local tag = db.marks and Where.TagOf("target")
+    if tagUnlocked and not tag then tag = (GetGuildInfo and GetGuildInfo("player") and orgGuilds[GetGuildInfo("player")]) or "TAG" end
     if tag then
         targetBadge.text:SetText(C.gold .. "RUIN [" .. tag .. "]|r")
+        targetBadge:SetWidth(18 + ((targetBadge.text.GetStringWidth and targetBadge.text:GetStringWidth()) or 100))
         targetBadge:Show()
     else
         targetBadge:Hide()
     end
+    targetBadge.outline:SetShown(tagUnlocked)
+    targetBadge:EnableMouse(tagUnlocked)
 end
+
+-- Where the tag goes: a spot key from TAG_SPOTS (its nudge starts over), and
+-- unlocking it to drag it (it shows a sample while no member is targeted).
+function Where.SetTagSpot(key)
+    if not TAG_BY[key] then return false end
+    db.tagAnchor, db.tagX, db.tagY = key, 0, 0
+    placeTag(); markTarget()
+    return true
+end
+function Where.UnlockTag(on)
+    tagUnlocked = on and true or false
+    markTarget()
+    if ui.moveTag then ui.moveTag:SetText(tagUnlocked and "Lock tag" or "Move tag") end
+end
+function Where.TagUnlocked() return tagUnlocked end
+function Where.TagBadge() return targetBadge end
 
 function Where.RefreshMarks()
     for i = 1, 40 do
@@ -205,6 +308,7 @@ end
 function Where.Init(module, cdb)
     M, db = module, cdb
     if db.marks == nil then db.marks = true end
+    if db.tagAnchor == nil then db.tagAnchor = "below" end
     if db.wherePins == nil then db.wherePins = true end
     loadGuilds()
     R:Subscribe("KEY_CHANGED", function() loadGuilds(); Where.RefreshMarks() end)

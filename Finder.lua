@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.7.0" })
+local M = R:RegisterModule("Finder", { version = "0.7.1" })
 ns.Finder = M
 
 local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
@@ -757,7 +757,7 @@ BINDING_NAME_RUIN_FINDER_TOGGLE = "Toggle 'I'm looking'"
 -- /finder on [activity]      look as a player
 -- /finder group [activity]   list your group (set needed roles on the page)
 -- /finder off | badge
--- /finder timer <name> [minutes] | where | layers | hop | leave
+-- /finder timer <name> [minutes] | where | layers | hop | leave | tag <spot|move|lock>
 SLASH_RUINFINDER1 = "/finder"
 SlashCmdList.RUINFINDER = function(msg)
     msg = (msg or ""):lower()
@@ -787,6 +787,18 @@ SlashCmdList.RUINFINDER = function(msg)
         M:Print(ok and "Asked the members on other layers of this zone." or err)
     elseif cmd == "leave" and ns.Layers then
         ns.Layers.Leave()
+    elseif cmd == "tag" and ns.Where then
+        local arg = rest:match("^(%S*)")
+        if arg == "move" or arg == "unlock" or arg == "lock" then
+            ns.Where.UnlockTag(arg ~= "lock" and not ns.Where.TagUnlocked())
+            M:Print(ns.Where.TagUnlocked() and "Tag unlocked: drag it by your target frame, then /finder tag lock." or "Tag locked.")
+        elseif arg ~= "" and ns.Where.SetTagSpot(arg) then
+            M:Print("The guild tag sits " .. arg .. " the target frame now.")
+        else
+            local keys = {}
+            for _, sp in ipairs(ns.Where.TAG_SPOTS) do keys[#keys + 1] = sp.key end
+            M:Print("/finder tag " .. table.concat(keys, " | ") .. " | move | lock")
+        end
     elseif cmd == "badge" then
         db.badge = not db.badge
         updateBadge()
