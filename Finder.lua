@@ -13,11 +13,13 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.7.1" })
+local M = R:RegisterModule("Finder", { version = "0.7.2" })
 ns.Finder = M
+M.UI = nil      -- set once the page is built (tests look at it)
 
-local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
-local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Professions", "Social" }
+local ACTIVITIES = { "Dungeon", "Raid", "PvP", "Questing", "Rares", "Professions", "Social" }
+local FILTERS = { "All", "Dungeon", "Raid", "PvP", "Questing", "Rares", "Professions", "Social" }
+local L = ns.Lists
 local LEVELS = { "All levels", "Within 3", "Within 5", "Within 10" }
 local LEVEL_RANGE = { ["Within 3"] = 3, ["Within 5"] = 5, ["Within 10"] = 10 }
 local LISTING = { "Player", "Group" }
@@ -25,7 +27,8 @@ local BEACON_EVERY, EXPIRE = 120, 300
 local MATCH_REPEAT = 600              -- don't alert the same match again for 10 minutes
 
 local DEFAULTS = { looking = false, tank = false, healer = false, dps = true,
-                   activity = "Dungeon", detail = "", note = "", spec = "", toasts = true,
+                   activity = "Dungeon", detail = "", note = "", spec = "Auto", toasts = true,
+                   profession = "", tone = "Casual", groupSize = 0, allowQueue = false,
                    listing = "Player", needT = 0, needH = 1, needD = 0, badge = true, badgePos = nil,
                    levels = "All levels" }
 
@@ -37,34 +40,60 @@ local filter = "All"
 local alerted = {}        -- GUID -> time of the last match alert
 local ui = {}
 local badge
+local requests = {}        -- join requests to your group: { name, c, l, sp, gu, role, a, t, queued }
+local REQUEST_KEEP = 900
+local refreshRequests = function() end
 
 ---------------------------------------------------------------------------
--- Spec guess from talent points (falls back to the manual Spec field)
+-- The Spec box: your talent spec ("Auto" reads it the way Codex does, from
+-- Codex itself when it's installed), a profession, or the tone of a chat.
 ---------------------------------------------------------------------------
-local function guessSpec()
-    if not GetTalentTabInfo then return nil end
-    local bestName, bestPoints = nil, 0
-    for tab = 1, 3 do
-        local res = { pcall(GetTalentTabInfo, tab) }
-        if res[1] then
-            local name, points
-            for i = 2, #res do
-                local v = res[i]
-                if not name and type(v) == "string" and v ~= "" then
-                    name = v
-                elseif name and points == nil and type(v) == "number" and v >= 0 and v <= 61 and v == math.floor(v) then
-                    points = v
-                end
-            end
-            if name and points and points > bestPoints then bestName, bestPoints = name, points end
-        end
+local function myClassTag() local _, c = UnitClass("player"); return c end
+
+local function autoSpec()
+    local cx = R:GetModule("Codex")
+    if cx and cx.MySpec then
+        local ok, sp = pcall(cx.MySpec)
+        if ok and type(sp) == "string" and sp ~= "" then return sp end
     end
-    return bestName
+    return L.TalentSpec(myClassTag())
 end
 
 local function mySpec()
-    if db.spec ~= "" then return db.spec end
-    return guessSpec()
+    if db.spec ~= "Auto" and db.spec ~= "" then return db.spec end
+    return autoSpec()
+end
+
+-- The first profession you know, for the Professions activity's default.
+local function knownProfession()
+    if not (GetProfessions and GetProfessionInfo) then return nil end
+    local ok, a, b, c, d, e = pcall(GetProfessions)
+    if not ok then return nil end
+    for _, idx in ipairs({ a, b, c, d, e }) do
+        local okn, name = pcall(GetProfessionInfo, idx)
+        if okn and L.Has(L.PROFESSIONS, name) then return name end
+    end
+end
+
+local function myProfession()
+    if L.Has(L.PROFESSIONS, db.profession) then return db.profession end
+    return knownProfession() or L.PROFESSIONS[1]
+end
+
+-- What your listing's spec slot says for the activity you picked.
+local function specField()
+    if db.activity == "Professions" then return myProfession() end
+    if db.activity == "Social" then return L.Has(L.TONES, db.tone) and db.tone or L.TONES[1] end
+    return mySpec()
+end
+
+-- What the Spec box offers for the activity you picked.
+local function specOptions()
+    if db.activity == "Professions" then return L.PROFESSIONS end
+    if db.activity == "Social" then return L.TONES end
+    local out = { "Auto" }
+    for _, sp in ipairs(L.SPECS[myClassTag()] or {}) do out[#out + 1] = sp end
+    return out
 end
 
 local function roleText(e)
@@ -91,7 +120,7 @@ local function isGroup() return db.listing == "Group" end
 local function buildBeacon()
     local p = R:GetPlayer()
     local b = {
-        g = p.guid, gu = p.guild, c = p.class, l = p.level, sp = mySpec(),
+        g = p.guid, gu = p.guild, c = p.class, l = p.level, sp = specField(),
         rt = db.tank and 1 or 0, rh = db.healer and 1 or 0, rd = db.dps and 1 or 0,
         a = db.activity, d = db.detail, nt = db.note,
         z = GetZoneText and GetZoneText() or nil,
@@ -102,9 +131,19 @@ local function buildBeacon()
         b.lt = "G"
         b.qt, b.qh, b.qd = db.needT or 0, db.needH or 0, db.needD or 0
         b.gs = math.max(1, b.gs)
+        b.sz = tonumber(db.groupSize) or 0
+        b.aq = db.allowQueue and 1 or 0
     end
     return b
 end
+
+-- A group listing that has the players it wants (sz) no longer takes join
+-- requests, unless it allows a queue (aq).
+local function isFull(e)
+    local sz = tonumber(e.sz) or 0
+    return sz > 0 and (tonumber(e.gs) or 1) >= sz
+end
+local function takesRequests(e) return not isFull(e) or e.aq == 1 end
 
 local function sendBeacon()
     if not R:IsConnected() then return end
@@ -139,6 +178,7 @@ end
 local function isMatch(e)
     if not db.looking or e.a ~= db.activity then return false end
     local me = buildBeacon()
+    if (e.lt == "G" and not takesRequests(e)) or (me.lt == "G" and not takesRequests(me)) then return false end
     if isGroup() and e.lt ~= "G" then return fills(e, me) end
     if not isGroup() and e.lt == "G" then return fills(me, e) end
     return false
@@ -242,7 +282,15 @@ local function refresh()
     ui.count:SetText(("%d other%s looking%s"):format(others, others == 1 and "" or "s",
         matches > 0 and ("  ·  " .. C.good .. matches .. " match" .. (matches == 1 and "" or "es") .. "|r") or ""))
     if ui.needRow then ui.needRow:SetShown(isGroup()) end
-    if ui.card then ui.card:SetHeight(isGroup() and 116 or 88) end
+    for _, k in ipairs({ "activity", "listing", "detail", "spec" }) do
+        if ui[k] and ui[k].Refresh then ui[k]:Refresh() end
+    end
+    if ui.lookingCheck then ui.lookingCheck:Refresh() end
+    if ui.queue then ui.queue:Refresh() end
+    if ui.size and not (ui.size.HasFocus and ui.size:HasFocus()) then
+        ui.size:SetText((db.groupSize or 0) > 0 and tostring(db.groupSize) or "")
+    end
+    refreshRequests()
 end
 
 function M:OnBeacon(d, sender)
@@ -262,6 +310,7 @@ function M:OnBeacon(d, sender)
     d.nt = type(d.nt) == "string" and d.nt or ""
     if d.lt ~= "G" then d.lt = nil end
     d.qt, d.qh, d.qd = tonumber(d.qt) or 0, tonumber(d.qh) or 0, tonumber(d.qd) or 0
+    d.sz, d.aq = math.max(0, tonumber(d.sz) or 0), d.aq == 1 and 1 or 0
     board[d.g] = d
     if isMatch(d) then
         maybeAlertMatch(d)
@@ -311,7 +360,8 @@ function M:QuickList(activity, detail, needT, needH, needD)
     db.needT, db.needH, db.needD = needT or 0, needH or 0, needD or 0
     if ui.activity then ui.activity:Refresh() end
     if ui.listing and ui.listing.Refresh then ui.listing:Refresh() end
-    if ui.detail then ui.detail:SetText(db.detail) end
+    if ui.detail then ui.detail:Refresh() end
+    if ui.spec then ui.spec:Refresh() end
     for key, box in pairs(ui.need or {}) do box:SetText(tostring(db[key] or 0)) end
     setLooking(true)
     changed()
@@ -347,14 +397,42 @@ end
 
 local function requestJoin(e)
     if not R:IsConnected() then return M:Print("Not connected to RUIN yet.") end
+    if not takesRequests(e) then return M:Print(e.name .. "'s group is full and isn't taking requests right now.") end
     local now = GetTime()
     if requested[e.name] and now - requested[e.name] < 60 then
         return M:Print("You already asked " .. e.name .. " in the last minute.")
     end
     requested[e.name] = now
     local p = R:GetPlayer()
-    M:Send("JOINREQ", { g = p.guid, c = p.class, l = p.level, sp = mySpec(), gu = p.guild, role = myRoleFor(e), a = e.a }, "PEER", e.name)
-    M:Print(("Asked %s to invite you to their group (as %s)."):format(e.name, myRoleFor(e)))
+    M:Send("JOINREQ", { g = p.guid, c = p.class, l = p.level, sp = specField(), gu = p.guild, role = myRoleFor(e), a = e.a }, "PEER", e.name)
+    if isFull(e) then
+        M:Print(("Asked %s to put you in their group's queue (as %s); the group is full for now."):format(e.name, myRoleFor(e)))
+    else
+        M:Print(("Asked %s to invite you to their group (as %s)."):format(e.name, myRoleFor(e)))
+    end
+end
+
+-- Join requests to your group, newest last, until you invite or decline
+-- them, they join, or 15 minutes pass. Shown on your listing card.
+M.Requests = function() return requests end
+
+local function dropRequest(name)
+    local short = R.Util.ShortName(name or "")
+    for i = #requests, 1, -1 do
+        if R.Util.ShortName(requests[i].name) == short then table.remove(requests, i) end
+    end
+end
+
+local function inviteRequest(r)
+    invite(r.name)
+    dropRequest(r.name)
+    refreshRequests()
+end
+
+local function declineRequest(r)
+    dropRequest(r.name)
+    if R:IsConnected() then M:Send("JOINNO", { a = db.activity }, "PEER", r.name) end
+    refreshRequests()
 end
 
 local joinPrompted = {}    -- requester name -> time
@@ -364,13 +442,36 @@ function M:OnJoinRequest(d, sender)
     local now = GetTime()
     if joinPrompted[sender] and now - joinPrompted[sender] < 60 then return end
     joinPrompted[sender] = now
+    local me = buildBeacon()
+    local full = isFull(me)
+    if full and not db.allowQueue then
+        M:Send("JOINFULL", { a = db.activity }, "PEER", sender)
+        M:Print(W.ClassName(sender, d.c) .. " asked to join, but your group is full (" .. me.sz .. " players). Tick Allow Queue to take requests anyway.")
+        return
+    end
     local role = (d.role == "Tank" or d.role == "Healer") and d.role or "DPS"
     pendingRoles[R.Util.ShortName(sender)] = role
+    dropRequest(sender)
+    requests[#requests + 1] = { name = sender, c = d.c, l = tonumber(d.l), sp = type(d.sp) == "string" and d.sp:sub(1, 24) or nil,
+        gu = type(d.gu) == "string" and d.gu or nil, role = role, a = type(d.a) == "string" and d.a or db.activity, t = now, queued = full }
+    refreshRequests()
     local who = ("%s (%s, level %s%s%s)"):format(W.ClassName(sender, d.c), role, tostring(tonumber(d.l) or "?"),
         (type(d.sp) == "string" and d.sp ~= "") and (" " .. d.sp) or "", type(d.gu) == "string" and (", " .. d.gu) or "")
+    if full then
+        M:Print(who .. " joined your group's queue. They're on your listing card.")
+        return
+    end
     M:Print(who .. " asks to join your group.")
     R:Confirm("Request to join", who .. " asks to join your group for " .. tostring(d.a or db.activity) .. ".\n\nInvite them?",
-        function() if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(sender) elseif InviteUnit then InviteUnit(sender) end end)
+        function() inviteRequest({ name = sender }) end)
+end
+
+function M:OnJoinFull(_, sender)
+    if type(sender) == "string" then M:Print(sender .. "'s group is full and isn't taking requests right now.") end
+end
+
+function M:OnJoinNo(_, sender)
+    if type(sender) == "string" then M:Print(sender .. " declined your request to join their group.") end
 end
 
 ---------------------------------------------------------------------------
@@ -424,6 +525,7 @@ function M.OnGroupChanged()
     local tracking = db.looking and isGroup()
     local changedAny = false
     for guid, m in pairs(now) do
+        if not members[guid] and m.name then dropRequest(m.name); refreshRequests() end
         if not members[guid] and tracking then
             local key = roleOf(guid, m)
             if (db[key] or 0) > 0 then
@@ -515,8 +617,49 @@ end
 ---------------------------------------------------------------------------
 -- Page
 ---------------------------------------------------------------------------
+-- The request list on your listing card, and the card's height to fit it.
+refreshRequests = function()
+    local now = GetTime()
+    for i = #requests, 1, -1 do
+        if now - (requests[i].t or 0) > REQUEST_KEEP then table.remove(requests, i) end
+    end
+    if not ui.card then return end
+    if not isGroup() then
+        ui.reqBox:Hide()
+        ui.card:SetHeight(88)
+        return
+    end
+    ui.reqBox:Show()
+    local n, shown = #requests, math.min(#requests, #ui.reqRows)
+    local me = buildBeacon()
+    local state = isFull(me) and (db.allowQueue and (C.gold .. "  ·  full, queue open|r") or (C.bad .. "  ·  full, not taking requests|r"))
+        or ((tonumber(me.sz) or 0) > 0 and (C.dim .. ("  ·  %d of %d players"):format(me.gs, me.sz) .. "|r") or "")
+    ui.reqTitle:SetText(C.gold .. "Join requests|r " .. (n == 0 and (C.dim .. "none yet|r") or (C.white .. n .. "|r"))
+        .. (n > shown and (C.dim .. ("  (newest %d shown)"):format(shown) .. "|r") or "") .. state)
+    for i, row in ipairs(ui.reqRows) do
+        local r = requests[n - shown + i]
+        if i <= shown and r then
+            local mins = math.floor((now - r.t) / 60)
+            row.text:SetText(("%s%s %s %s%s|r  %s%s%s%s|r"):format(r.queued and (C.gold .. "Queued|r ") or "",
+                W.RoleIcon(r.role == "Tank" and "T" or (r.role == "Healer" and "H" or "D")), W.ClassName(r.name, r.c),
+                C.dim, r.l and ("level " .. r.l) or "", C.white, r.sp and (" " .. r.sp) or "",
+                C.dim, (r.gu and (" · " .. r.gu) or "") .. (mins > 0 and (" · " .. mins .. "m ago") or " · just now")))
+            row.yes:SetScript("OnClick", function() inviteRequest(r) end)
+            row.no:SetScript("OnClick", function() declineRequest(r) end)
+            row.yes.tip = "Invite " .. tostring(r.name)
+            row.no.tip = "Take them off the list and let them know"
+            row:Show()
+        else
+            row:Hide()
+        end
+    end
+    ui.reqBox:SetHeight(18 + shown * 24)
+    ui.card:SetHeight(116 + 22 + shown * 24)
+end
+
 local function buildBoard(panel)
     ui.panel = panel
+    M.UI = ui
     -- Your listing: what you want, then (for groups) who you still need.
     local card = W.Card(panel)
     card:SetPoint("TOPLEFT", 0, 0)
@@ -551,20 +694,72 @@ local function buildBoard(panel)
         c:SetPoint("TOPLEFT", r[3], -26)
     end
 
-    local activity = W.Cycle(card, 150, ACTIVITIES, function() return db.activity end,
-        function(v) db.activity = v; alerted = {}; changed() end, "Activity: ")
+    -- Activity, then which one (a dropdown that follows the activity), a
+    -- note, your spec (or profession, or tone), and how big the group gets.
+    local detail, spec
+    local function detailOptions()
+        local out = { "" }
+        for _, v in ipairs(L.DETAILS[db.activity] or {}) do out[#out + 1] = v end
+        -- a detail set elsewhere (Muster's "Find group" names a boss or rare) stays pickable
+        if db.detail ~= "" and not L.Has(out, db.detail) then out[#out + 1] = db.detail end
+        return out
+    end
+    local activity = W.Cycle(card, 140, ACTIVITIES, function() return db.activity end,
+        function(v)
+            if v ~= db.activity then db.detail = "" end
+            db.activity = v; alerted = {}
+            detail:Refresh(); spec:Refresh()
+            changed()
+        end, "Activity: ")
     activity:SetPoint("TOPLEFT", 8, -56)
     ui.activity, ui.listing = activity, listing
-    local detail = W.EditBox(card, 150, function(t) db.detail = t:sub(1, 30); changed() end, "Which dungeon or zone")
+    local ANY = { Dungeon = "Any dungeon", Raid = "Any raid", PvP = "Any PvP", Questing = "Any zone", Rares = "Any rares",
+                  Professions = "Anything", Social = "Anything" }
+    detail = W.Dropdown(card, 150, detailOptions, function() return db.detail end,
+        function(v) db.detail = tostring(v or ""):sub(1, 30); changed() end)
+    detail.format = function(v) return (v == nil or v == "") and (C.dim .. (ANY[db.activity] or "Any") .. "|r") or v end
+    detail.tipTitle = "Which one"
+    detail:Refresh()
     detail:SetPoint("LEFT", activity, "RIGHT", 8, 0)
-    detail:SetText(db.detail)
     ui.detail = detail
-    local note = W.EditBox(card, 180, function(t) db.note = t:sub(1, 60); changed() end, "Note for others (optional)")
+    local note = W.EditBox(card, 110, function(t) db.note = t:sub(1, 60); changed() end, "Note (optional)")
     note:SetPoint("LEFT", detail, "RIGHT", 8, 0)
     note:SetText(db.note)
-    local spec = W.EditBox(card, 110, function(t) db.spec = t:sub(1, 20); changed() end, "Spec (auto)")
+    spec = W.Dropdown(card, 120, specOptions, function()
+        if db.activity == "Professions" then return myProfession() end
+        if db.activity == "Social" then return specField() end
+        return L.Has(specOptions(), db.spec) and db.spec or "Auto"
+    end, function(v)
+        if db.activity == "Professions" then db.profession = v
+        elseif db.activity == "Social" then db.tone = v
+        else db.spec = v end
+        changed()
+    end)
+    spec.format = function(v)
+        if v ~= "Auto" then return v end
+        local sp = autoSpec()
+        return "Auto" .. (sp and (C.dim .. " · " .. sp .. "|r") or "")
+    end
+    spec.tipTitle = "Your spec, profession or tone"
+    spec.tip = "Auto reads your spec from your talents (from Codex when it's installed). For Professions, pick the profession; for Social, the tone of the chat."
+    spec:Refresh()
     spec:SetPoint("LEFT", note, "RIGHT", 8, 0)
-    spec:SetText(db.spec)
+    ui.spec = spec
+    local size = W.EditBox(card, 40, function(t)
+        db.groupSize = math.max(0, math.min(40, tonumber(t) or 0)); changed()
+    end, "Size")
+    size:SetPoint("LEFT", spec, "RIGHT", 8, 0)
+    size:SetText((db.groupSize or 0) > 0 and tostring(db.groupSize) or "")
+    if size.SetNumeric then size:SetNumeric(true) end
+    if size.SetMaxLetters then size:SetMaxLetters(2) end
+    if size.SetJustifyH then size:SetJustifyH("CENTER") end
+    size.tip = "How many players you want in your group. Once it has that many, it stops taking join requests. Leave it empty for no limit."
+    ui.size = size
+    local queue = W.Check(card, "Allow Queue", function() return db.allowQueue end, function(v) db.allowQueue = v; changed() end)
+    queue:SetPoint("LEFT", size, "RIGHT", 6, 0)
+    queue.label:SetFontObject(GameFontHighlightSmall)
+    queue.tip = "Keep taking join requests after your group reaches its size; they wait in your request list."
+    ui.queue = queue
 
     -- Group listings: how many of each role the group still needs.
     ui.needRow = CreateFrame("Frame", nil, card)
@@ -587,6 +782,31 @@ local function buildBoard(panel)
     end
     local nh = W.Label(ui.needRow, C.dim .. "Players who can fill a role are alerted.|r", "GameFontHighlightSmall")
     nh:SetPoint("LEFT", x + 6, 0)
+
+    -- Group listings: everyone asking to join, as they ask.
+    local rq = CreateFrame("Frame", nil, card)
+    rq:SetPoint("TOPLEFT", 8, -114)
+    rq:SetPoint("RIGHT", card, "RIGHT", -8, 0)
+    rq:SetHeight(20)
+    ui.reqBox = rq
+    ui.reqTitle = W.Label(rq, "", "GameFontNormalSmall")
+    ui.reqTitle:SetPoint("TOPLEFT", 0, -2)
+    ui.reqRows = {}
+    for i = 1, 4 do
+        local row = CreateFrame("Frame", nil, rq)
+        row:SetPoint("TOPLEFT", 0, -18 - (i - 1) * 24)
+        row:SetPoint("RIGHT", rq, "RIGHT", 0, 0)
+        row:SetHeight(22)
+        row.text = W.Label(row, "", "GameFontHighlightSmall")
+        row.text:SetPoint("LEFT", 6, 0)
+        row.text:SetPoint("RIGHT", row, "RIGHT", -150, 0)
+        row.text:SetWordWrap(false)
+        row.no = W.Button(row, "Decline", 66)
+        row.no:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.yes = W.Button(row, "Invite", 66)
+        row.yes:SetPoint("RIGHT", row.no, "LEFT", -4, 0)
+        ui.reqRows[i] = row
+    end
 
     local h2 = W.Header(panel, "Looking now across RUIN")
     h2:SetPoint("TOPLEFT", card, "BOTTOMLEFT", 0, -12)
@@ -640,14 +860,16 @@ local function buildBoard(panel)
         row.wsp:SetText("Ask")
         row.wsp:SetWidth(52)
         if W.LinkTo then W.LinkTo(row.wsp, nil) end
-        row.inv:SetText(e.lt == "G" and "Request to join" or "Invite")
+        local closed = e.lt == "G" and not takesRequests(e)
+        row.inv:SetText(e.lt == "G" and (closed and "Group full" or (isFull(e) and "Join queue" or "Request to join")) or "Invite")
         row.inv:SetWidth(e.lt == "G" and 112 or 58)
+        if row.inv.SetEnabled then row.inv:SetEnabled(not closed) end
         local where = e.d ~= "" and (": " .. e.d) or ""
         local note = e.nt ~= "" and (C.dim .. " · " .. e.nt .. "|r") or ""
         local tag = e.self and (C.good .. "You:|r ") or (e.match and (C.good .. "Match|r ") or "")
         if e.lt == "G" then
-            row.text:SetText(("%s%sGroup of %d|r %s  %s%s%s|r  %s%s  %s%s|r"):format(tag, C.white, tonumber(e.gs) or 1,
-                W.ClassName(e.name, e.c), C.gold, e.a, where, needText(e), note, C.dim, e.gu and (" · " .. e.gu) or ""))
+            row.text:SetText(("%s%sGroup of %d%s|r %s  %s%s%s|r  %s%s  %s%s|r"):format(tag, C.white, tonumber(e.gs) or 1,
+                (tonumber(e.sz) or 0) > 0 and ("/" .. e.sz) or "", W.ClassName(e.name, e.c), C.gold, e.a, where, needText(e), note, C.dim, e.gu and (" · " .. e.gu) or ""))
         else
             row.text:SetText(("%s%s %s %s%d %s|r  %s%s%s|r%s  %s%s|r"):format(tag, roleText(e), W.ClassName(e.name, e.c),
                 C.dim, tonumber(e.l) or 0, e.sp or "", C.gold, e.a, where, note, C.dim, e.gu and (" · " .. e.gu) or ""))
@@ -657,7 +879,9 @@ local function buildBoard(panel)
         row.wsp:SetScript("OnClick", function() whisper(e.name) end)
         row.inv:SetScript("OnClick", function() if e.lt == "G" then requestJoin(e) else invite(e.name) end end)
         row.wsp.tip = "Whisper " .. tostring(e.name)
-        row.inv.tip = e.lt == "G" and "Ask the group's leader to invite you; they get a prompt with your role, class and level"
+        row.inv.tip = e.lt == "G" and (closed and "This group has the players it wants and isn't taking requests."
+            or (isFull(e) and "The group is full, but its leader keeps a queue: ask to be put on it."
+            or "Ask the group's leader to invite you; they get a prompt with your role, class and level"))
             or ("Invite " .. tostring(e.name) .. " to your group")
         row.tip = (not e.self) and function(tip)
             tip:AddLine(W.ClassName(e.name, e.c), 1, 1, 1)
@@ -711,6 +935,7 @@ function M:OnEnable()
     if type(RUIN_FinderCharDB) ~= "table" then RUIN_FinderCharDB = {} end
     db = RUIN_FinderCharDB
     for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+    if db.spec == "" then db.spec = "Auto" end        -- the old free-text box, left empty
     if type(RUIN_FinderDB) ~= "table" then RUIN_FinderDB = {} end
     ns.Timers.Init(self, RUIN_FinderDB)
     if ns.Where then ns.Where.Init(self, db) end
@@ -719,6 +944,8 @@ function M:OnEnable()
     self:Listen("BEACON", "OnBeacon")
     self:Listen("ASK", "OnAsk")
     self:Listen("JOINREQ", "OnJoinRequest")
+    self:Listen("JOINFULL", "OnJoinFull")
+    self:Listen("JOINNO", "OnJoinNo")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", function() M.OnGroupChanged() end)
     C_Timer.After(3, function() M.OnGroupChanged() end)
     self:AddTab("Finder", buildPage)

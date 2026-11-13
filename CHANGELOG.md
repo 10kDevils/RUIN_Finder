@@ -6,6 +6,14 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.7.2 — 2026-11-12
+
+- **New activity: Rares** (right below Questing), for hunting rare mobs, rare items and secrets.
+- **"Which one" is a dropdown now** and follows the activity: every dungeon or raid, PvP (Dueling, World, Battlegrounds), every questing zone (no capital cities), Rares (Mobs, Items, Secrets), Professions (Farming, Services) and Social (Just Chatting, Theory Craft, RP).
+- **The Spec box is a dropdown that starts on Auto**: it reads your spec from your talents the way Codex does, and asks Codex itself when it's installed. For Professions it lists every primary, secondary and class profession; for Social, the tone of the chat (Casual, Mutual, Engaged).
+- **Group size and Allow Queue**: set how many players you want; once your group has that many, it stops taking join requests (the board shows it as full). Tick Allow Queue to keep taking requests anyway.
+- **Join requests list** on your listing card: everyone asking to join your group shows up as they ask, with Invite and Decline. Declined players are told, and queued requests are marked.
+
 ## 0.7.1 — 2026-11-12
 
 - **Where the guild tag sits by your target frame is up to you** (Finder > Where): pick a side or corner (below, below left or right, above, above left or right, left or right side), or press **Move tag** to drag it anywhere around the frame (it shows a sample until you target a member) and press **Lock tag** when done. Picking a spot puts it back there. Also /finder tag <spot>, /finder tag move, /finder tag lock. It starts on the right side of the frame. The Where page's header is rearranged to fit the new controls.
