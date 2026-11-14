@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.7.1" })
+local M = R:RegisterModule("Finder", { version = "0.7.2" })
 ns.Finder = M
 M.UI = nil      -- set once the page is built (tests look at it)
 
@@ -597,7 +597,7 @@ updateBadge = function()
         end)
         badge:SetScript("OnEnter", function(self)
             if not GameTooltip then return end
-            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            W.TipOwner(self)
             GameTooltip:AddLine("RUIN Finder", 0.82, 0.31, 0.54)
             GameTooltip:AddLine("Left-click: open Finder.  Right-click: stop looking.  Drag to move.", 1, 1, 1, true)
             GameTooltip:Show()

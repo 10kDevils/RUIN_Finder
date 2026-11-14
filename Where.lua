@@ -254,7 +254,7 @@ local function buildBadge()
     end)
     targetBadge:SetScript("OnEnter", function(self)
         if tagUnlocked and GameTooltip then
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            W.TipOwner(self)
             GameTooltip:AddLine("Drag the tag where you want it. Finder > Where > Lock tag when done.", 1, 1, 1, true)
             GameTooltip:Show()
         end

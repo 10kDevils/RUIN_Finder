@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.7.2 — 2026-11-14
+
+- **Tooltips are compact and sit beside what you point at**: long lines break onto several short ones, and the tooltip opens to the side of the button with more room.
+
 ## 0.7.1 — 2026-11-12
 
 - **Where the guild tag sits by your target frame is up to you** (Finder > Where): pick a side or corner (below, below left or right, above, above left or right, left or right side), or press **Move tag** to drag it anywhere around the frame (it shows a sample until you target a member) and press **Lock tag** when done. Picking a spot puts it back there. Also /finder tag <spot>, /finder tag move, /finder tag lock. It starts on the right side of the frame. The Where page's header is rearranged to fit the new controls.
