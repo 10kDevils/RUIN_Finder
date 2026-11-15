@@ -708,19 +708,29 @@ local function linkListing()
 end
 M.LinkListing = linkListing
 
--- [RUIN Finder: Name - ...] in a chat line -> a clickable link.
-function M.LinkifyChat(msg)
+-- [RUIN Finder: Name - ...] in a chat line -> a clickable link. Only for a
+-- player linking their own listing (author given): anyone can type the text,
+-- and a link in RUIN's color naming someone else would lend it trust it hasn't
+-- earned. Without an author (tests, other callers) every one is linked.
+local function short(n) return (tostring(n or ""):gsub("%-.*$", "")):lower() end
+function M.LinkifyChat(msg, author)
     if type(msg) ~= "string" or not msg:find("[RUIN Finder: ", 1, true) then return msg end
     return (msg:gsub("%[RUIN Finder: ([^%]|]-) %- ([^%]|]*)%]", function(name, rest)
+        if author and short(name) ~= short(author) then return nil end
         return ("%s|Haddon:RUIN:finder:%s|h[RUIN Finder: %s - %s]|h|r"):format(LINK_COLOR, name, name, rest)
     end))
 end
 
-local function chatFilter(_, _, msg, ...)
-    local out = M.LinkifyChat(msg)
-    if out ~= msg then return false, out, ... end
+local function chatFilter(_, event, msg, author, ...)
+    if type(msg) ~= "string" or (issecretvalue and (issecretvalue(msg) or issecretvalue(author))) then return false end
+    -- a whisper you sent names its recipient as the author: the link is yours
+    local who = (type(event) == "string" and event:find("_INFORM$")) and UnitName("player") or author
+    if type(who) ~= "string" or who == "" or event == "CHAT_MSG_BN_WHISPER" then return false end
+    local out = M.LinkifyChat(msg, who)
+    if out ~= msg then return false, out, author, ... end
     return false
 end
+M.ChatFilter = chatFilter
 
 -- Clicked: open Finder's board with that listing at the top, highlighted.
 function M.OpenLinkedListing(name)
@@ -753,7 +763,7 @@ local function hookLinks()
         for _, ev in ipairs({ "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY",
             "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_INSTANCE_CHAT",
             "CHAT_MSG_INSTANCE_CHAT_LEADER", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_CHANNEL",
-            "CHAT_MSG_COMMUNITIES_CHANNEL", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM" }) do
+            "CHAT_MSG_COMMUNITIES_CHANNEL", "CHAT_MSG_BN_WHISPER_INFORM" }) do
             pcall(addFilter, ev, chatFilter)
         end
     end
