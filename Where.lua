@@ -317,7 +317,7 @@ function Where.Init(module, cdb)
     if db.wherePins == nil then db.wherePins = true end
     loadGuilds()
     R:Subscribe("KEY_CHANGED", function() loadGuilds(); Where.RefreshMarks() end)
-    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) markPlate(unit) end)
+    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) pcall(markPlate, unit) end)
     M:RegisterEvent("PLAYER_TARGET_CHANGED", markTarget)
     local function update() Where.UpdatePins(); Where.Refresh() end
     R:Subscribe("ORG_ROSTER_UPDATED", update)

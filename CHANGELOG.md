@@ -10,6 +10,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 - **Tooltips are compact and sit beside what you point at**: long lines break onto several short ones, and the tooltip opens to the side of the button with more room.
 - **Link your listing in chat**: *Link in chat* on the Your listing card puts `[RUIN Finder: You - Dungeon: ...]` in the chat box. Anyone can read it; anyone with Finder sees a link that opens the board with your listing at the top, highlighted.
+- **No errors from nameplates in fights**: layer detection and RUIN marks skip what Retail 12 hides about a nameplate in combat.
 
 ## 0.7.1 — 2026-11-12
 

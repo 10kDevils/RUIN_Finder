@@ -78,7 +78,9 @@ end
 -- A creature seen: count it toward the layer it says.
 function Layers.Observe(unit)
     if not UnitExists(unit) or (UnitIsPlayer and UnitIsPlayer(unit)) or (UnitPlayerControlled and UnitPlayerControlled(unit)) then return end
-    local layer, npc = Layers.Parse(UnitGUID(unit))
+    local guid = UnitGUID(unit)
+    if type(guid) ~= "string" or (issecretvalue and issecretvalue(guid)) then return end   -- hidden in combat
+    local layer, npc = Layers.Parse(guid)
     if not layer then return end
     if layer == mine.layer then candidate.layer, candidate.npcs = nil, {}; return end
     if candidate.layer ~= layer then
@@ -310,7 +312,8 @@ function Layers.Init(module, cdb)
     M:Listen("HOPTAKEN", onHopTaken)
     M:RegisterEvent("PLAYER_TARGET_CHANGED", function() Layers.Observe("target") end)
     M:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function() Layers.Observe("mouseover") end)
-    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) Layers.Observe(unit) end)
+    -- nameplates come and go in fights, where Retail 12 hides some of what they'd tell: never an error
+    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) pcall(Layers.Observe, unit) end)
     M:RegisterEvent("ZONE_CHANGED_NEW_AREA", function()
         mine.layer, mine.zone = nil, zoneName()
         candidate.layer, candidate.npcs = nil, {}
