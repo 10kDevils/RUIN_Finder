@@ -238,15 +238,24 @@ local function musterRows()
     return rows
 end
 
+local focusName, focusUntil = nil, 0   -- a listing opened from a chat link
+local function isFocus(e)
+    if not focusName or GetTime() > focusUntil or not e or not e.name then return false end
+    if R.SameName then return R:SameName(e.name, focusName) end
+    return e.name == focusName
+end
+
 local function boardItems()
     local items, now = {}, GetTime()
     for _, e in pairs(board) do
-        if now - e.t <= EXPIRE and (filter == "All" or e.a == filter) and levelOk(e) then
+        if now - e.t <= EXPIRE and (isFocus(e) or ((filter == "All" or e.a == filter) and levelOk(e))) then
             e.match = isMatch(e)
             items[#items + 1] = e
         end
     end
     table.sort(items, function(a, b)
+        local fa, fb = isFocus(a), isFocus(b)
+        if fa ~= fb then return fa end
         if a.match ~= b.match then return a.match end
         if a.a ~= b.a then return a.a < b.a end
         return tostring(a.name) < tostring(b.name)
@@ -276,6 +285,10 @@ local function refresh()
         local me = buildBeacon()
         me.name, me.t, me.self = UnitName("player"), GetTime(), true
         table.insert(items, 1, me)
+    end
+    -- a listing opened from a chat link goes above everything
+    for i, e in ipairs(items) do
+        if i > 1 and e.g and board[e.g] == e and isFocus(e) then table.insert(items, 1, table.remove(items, i)) break end
     end
     ui.list:SetItems(items)
     local matches = matchCount()
@@ -657,6 +670,99 @@ refreshRequests = function()
     ui.card:SetHeight(116 + 22 + shown * 24)
 end
 
+---------------------------------------------------------------------------
+-- Chat links: "Link" puts [RUIN Finder: You - Dungeon: Deadmines] in chat as
+-- plain text (readable by anyone); with Finder, it's a link that opens the
+-- board on that listing.
+---------------------------------------------------------------------------
+local LINK_COLOR = "|cffd14f8a"
+local function listingSummary()
+    local where = db.activity or "Social"
+    if db.detail and db.detail ~= "" then where = where .. ": " .. db.detail end
+    if isGroup() then
+        local t = {}
+        if (db.needT or 0) > 0 then t[#t + 1] = db.needT .. " tank" end
+        if (db.needH or 0) > 0 then t[#t + 1] = db.needH .. " healer" end
+        if (db.needD or 0) > 0 then t[#t + 1] = db.needD .. " dps" end
+        if #t > 0 then where = where .. ", need " .. table.concat(t, ", ") end
+    end
+    return (where:gsub("[%[%]|]", ""))
+end
+
+function M.ListingLinkText()
+    return ("[RUIN Finder: %s - %s]"):format(UnitName("player") or "?", listingSummary())
+end
+
+local function linkListing()
+    if not db.looking then
+        return M:Print("Tick \"I'm looking\" first; the link opens your listing on the board.")
+    end
+    local text = M.ListingLinkText()
+    local insert = ChatEdit_InsertLink or (ChatFrameUtil and ChatFrameUtil.InsertLink)
+    if insert then
+        local ok, done = pcall(insert, text)
+        if ok and done then return end
+    end
+    local open = ChatFrame_OpenChat or (ChatFrameUtil and ChatFrameUtil.OpenChat)
+    if open then pcall(open, text) end
+end
+M.LinkListing = linkListing
+
+-- [RUIN Finder: Name - ...] in a chat line -> a clickable link.
+function M.LinkifyChat(msg)
+    if type(msg) ~= "string" or not msg:find("[RUIN Finder: ", 1, true) then return msg end
+    return (msg:gsub("%[RUIN Finder: ([^%]|]-) %- ([^%]|]*)%]", function(name, rest)
+        return ("%s|Haddon:RUIN:finder:%s|h[RUIN Finder: %s - %s]|h|r"):format(LINK_COLOR, name, name, rest)
+    end))
+end
+
+local function chatFilter(_, _, msg, ...)
+    local out = M.LinkifyChat(msg)
+    if out ~= msg then return false, out, ... end
+    return false
+end
+
+-- Clicked: open Finder's board with that listing at the top, highlighted.
+function M.OpenLinkedListing(name)
+    if type(name) ~= "string" or name == "" then return end
+    focusName, focusUntil = name, GetTime() + 60
+    M:OpenTab()
+    M:SelectSubTab("Board")
+    local found = false
+    if R.SameName and R:SameName(name, UnitName("player") or "") then found = db.looking end
+    for _, e in pairs(board) do if isFocus(e) then found = true end end
+    refresh()
+    if ui.list and ui.list.frame and ui.list.frame.SetVerticalScroll then pcall(ui.list.frame.SetVerticalScroll, ui.list.frame, 0) end
+    if not found then M:Print(name .. "'s listing isn't on the board any more; it may have ended.") end
+end
+
+local lastRef, lastRefAt = nil, 0
+local function onItemRef(link)
+    if type(link) ~= "string" then return end
+    local name = link:match("^addon:RUIN:finder:(.+)$")
+    if not name then return end
+    if link == lastRef and GetTime() - lastRefAt < 0.3 then return end   -- caught by both hooks
+    lastRef, lastRefAt = link, GetTime()
+    M.OpenLinkedListing(name)
+end
+M.OnItemRef = onItemRef
+
+local function hookLinks()
+    local addFilter = ChatFrame_AddMessageEventFilter or (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter)
+    if addFilter then
+        for _, ev in ipairs({ "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY",
+            "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_INSTANCE_CHAT",
+            "CHAT_MSG_INSTANCE_CHAT_LEADER", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_CHANNEL",
+            "CHAT_MSG_COMMUNITIES_CHANNEL", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM" }) do
+            pcall(addFilter, ev, chatFilter)
+        end
+    end
+    if EventRegistry and EventRegistry.RegisterCallback then
+        pcall(EventRegistry.RegisterCallback, EventRegistry, "SetItemRef", function(_, link) onItemRef(link) end, M)
+    end
+    if SetItemRef and hooksecurefunc then pcall(hooksecurefunc, "SetItemRef", function(link) onItemRef(link) end) end
+end
+
 local function buildBoard(panel)
     ui.panel = panel
     M.UI = ui
@@ -677,6 +783,12 @@ local function buildBoard(panel)
     toasts.tip = "Pop up an alert when someone who fits your listing appears."
     badgeCheck.tip = "Show a small on-screen badge while you're listed."
     toasts.label:SetFontObject(GameFontHighlightSmall)
+    local linkBtn = W.Button(card, "Link in chat", 92, linkListing)
+    linkBtn:SetHeight(20)
+    linkBtn.label:SetFontObject(GameFontHighlightSmall)
+    linkBtn:SetPoint("RIGHT", toasts, "LEFT", -10, 0)
+    linkBtn.tip = "Put a link to your listing in chat; anyone with Finder can click it to open the board on your listing."
+    ui.linkBtn = linkBtn
 
     ui.lookingCheck = W.Check(card, "I'm looking", function() return db.looking end, setLooking)
     ui.lookingCheck:SetPoint("TOPLEFT", 4, -26)
@@ -867,6 +979,11 @@ local function buildBoard(panel)
         local where = e.d ~= "" and (": " .. e.d) or ""
         local note = e.nt ~= "" and (C.dim .. " · " .. e.nt .. "|r") or ""
         local tag = e.self and (C.good .. "You:|r ") or (e.match and (C.good .. "Match|r ") or "")
+        if e.g and board[e.g] == e and isFocus(e) then
+            tag = C.gold .. "Linked|r " .. tag
+            local a = W.SchemeOf(row).accent
+            row.zebra:SetColorTexture(a[1], a[2], a[3], 0.28)
+        end
         if e.lt == "G" then
             row.text:SetText(("%s%sGroup of %d%s|r %s  %s%s%s|r  %s%s  %s%s|r"):format(tag, C.white, tonumber(e.gs) or 1,
                 (tonumber(e.sz) or 0) > 0 and ("/" .. e.sz) or "", W.ClassName(e.name, e.c), C.gold, e.a, where, needText(e), note, C.dim, e.gu and (" · " .. e.gu) or ""))
@@ -949,6 +1066,7 @@ function M:OnEnable()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", function() M.OnGroupChanged() end)
     C_Timer.After(3, function() M.OnGroupChanged() end)
     self:AddTab("Finder", buildPage)
+    hookLinks()
     R:Subscribe("Muster:EVENTS", function() refresh() end)
 
     local function ask()
