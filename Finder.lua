@@ -13,7 +13,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Finder", { version = "0.8.0" })
+local M = R:RegisterModule("Finder", { version = "0.8.1" })
 ns.Finder = M
 M.UI = nil      -- set once the page is built (tests look at it)
 
@@ -964,7 +964,7 @@ local function buildBoard(panel)
             for _, r in ipairs({ "T", "H", "D" }) do
                 if (s.open[r] or 0) > 0 then open[#open + 1] = s.open[r] .. W.RoleIcon(r) end
             end
-            row.text:SetText(("%sMuster|r  %s%s|r  %s  %s%s|r  needs %s"):format("|cffd9622b", C.white, s.title, s.kind or "",
+            row.text:SetText(("%sMuster|r  %s%s|r  %s  %s%s|r  needs %s"):format(W.AddonHex and W.AddonHex("Muster") or "|cffd9622b", C.white, s.title, s.kind or "",
                 C.gold, date("%a %H:%M", s.at), table.concat(open, " ")))
             row.wsp:SetText("Sign up")
             row.wsp:SetWidth(66)

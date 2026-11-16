@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.8.1
+
+- In the Blizzard window style, the Muster events on the board are labeled in the game's gold, not Muster's orange.
+
 ## 0.8.0 — 2026-11-15
 
 - **Tooltips are compact and sit beside what you point at**: long lines break onto several short ones, and the tooltip opens to the side of the button with more room.
