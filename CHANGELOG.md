@@ -6,7 +6,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
-## 0.8.1
+## 0.8.1 — 2026-11-16
 
 - In the Blizzard window style, the Muster events on the board are labeled in the game's gold, not Muster's orange.
 
