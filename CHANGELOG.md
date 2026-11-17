@@ -4,7 +4,9 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
-(nothing yet)
+## 0.8.2
+
+- **Lock tag locks the tag.** The Where page's button only ever unlocked it; pressing it again now locks the tag where you dropped it.
 
 ## 0.8.1 — 2026-11-16
 

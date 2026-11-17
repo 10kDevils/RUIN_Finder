@@ -92,7 +92,7 @@ function Where.Build(page)
     ui.tagSpot:SetPoint("TOPRIGHT", page, "TOPRIGHT", -112, -1)
     ui.tagSpot.tip = "Which side or corner of the target frame the guild tag sits on. Picking one puts it back on that spot."
     if ui.tagSpot.Refresh then ui.tagSpot:Refresh() end
-    ui.moveTag = W.Button(page, "Move tag", 104, function() Where.UnlockTag(not tagUnlocked) end)
+    ui.moveTag = W.Button(page, "Move tag", 104, function() Where.UnlockTag(not Where.TagUnlocked()) end)
     ui.moveTag:SetPoint("LEFT", ui.tagSpot, "RIGHT", 6, 0)
     ui.moveTag.tip = "Unlock the tag to drag it anywhere around the target frame (it shows a sample until you target a member). Click again to lock it."
     ui.sub = W.Label(page, C.dim .. "Online members of every RUIN guild by zone. Only zones are shared, never positions.|r", "GameFontHighlightSmall")
@@ -293,6 +293,7 @@ function Where.UnlockTag(on)
 end
 function Where.TagUnlocked() return tagUnlocked end
 function Where.TagBadge() return targetBadge end
+function Where.TagButton() return ui.moveTag end
 
 function Where.RefreshMarks()
     for i = 1, 40 do
