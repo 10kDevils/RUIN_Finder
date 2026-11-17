@@ -1,0 +1,44 @@
+# Publishes a GitHub release for this addon whenever its version (## Version in
+# the .toc) has no release yet. Push to main with a new version and the tag
+# v<version>, the release notes (from CHANGELOG.md) and a ready-to-install zip
+# appear on their own. Nothing happens when the version already has a release.
+name: Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Publish the release when the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          toc=$(ls ./*.toc | head -n1)
+          addon=$(basename "$toc" .toc)
+          version=$(sed -n 's/^## Version: *//p' "$toc" | tr -d '\r')
+          tag="v${version}"
+          echo "$addon $version -> $tag"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists, nothing to do."
+            exit 0
+          fi
+          # notes: the CHANGELOG section for this version
+          awk -v v="$version" '
+            $0 ~ "^## " v "([^0-9.]|$)" { f=1; next }
+            f && /^## / { exit }
+            f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "$addon $version" > notes.md
+          printf '\nExtract the zip into your WoW Forever `Interface/AddOns` folder.\n' >> notes.md
+          # zip: the addon folder, ready to extract
+          mkdir -p "dist/$addon"
+          tar --exclude=.git --exclude=.github --exclude=dist --exclude=notes.md -cf - . | tar -xf - -C "dist/$addon"
+          (cd dist && zip -qr "$addon-$version.zip" "$addon")
+          gh release create "$tag" "dist/$addon-$version.zip" \
+            --target "$GITHUB_SHA" --title "$addon $version" --notes-file notes.md
