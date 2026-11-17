@@ -1,7 +1,13 @@
 # Publishes a GitHub release for this addon whenever its version (## Version in
-# the .toc) has no release yet. Push to main with a new version and the tag
-# v<version>, the release notes (from CHANGELOG.md) and a ready-to-install zip
-# appear on their own. Nothing happens when the version already has a release.
+# the .toc) has no release yet, then uploads that release to its CurseForge
+# project once.
+#
+# * GitHub release: tag v<version>, notes from CHANGELOG.md, install-ready zip.
+# * CurseForge: needs the repository secret CF_API_KEY (authors.curseforge.com >
+#   API Tokens); without it this step is skipped. After a successful upload the
+#   tag curseforge/v<version> is pushed, so each version is uploaded only once;
+#   delete that tag to upload a version again.
+# * Run it by hand from the Actions tab to upload an existing release.
 name: Release
 on:
   push:
@@ -9,6 +15,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+env:
+  CF_PROJECT: "1812626"
+  CF_GAME_VERSION: "1.60.1"
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -17,6 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Publish the release when the version is new
+        id: rel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -24,21 +34,65 @@ jobs:
           addon=$(basename "$toc" .toc)
           version=$(sed -n 's/^## Version: *//p' "$toc" | tr -d '\r')
           tag="v${version}"
+          echo "addon=$addon" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "$addon $version -> $tag"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists, nothing to do."
+            echo "Release $tag already exists."
             exit 0
           fi
-          # notes: the CHANGELOG section for this version
           awk -v v="$version" '
             $0 ~ "^## " v "([^0-9.]|$)" { f=1; next }
             f && /^## / { exit }
             f' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "$addon $version" > notes.md
           printf '\nExtract the zip into your WoW Forever `Interface/AddOns` folder.\n' >> notes.md
-          # zip: the addon folder, ready to extract
           mkdir -p "dist/$addon"
           tar --exclude=.git --exclude=.github --exclude=dist --exclude=notes.md -cf - . | tar -xf - -C "dist/$addon"
           (cd dist && zip -qr "$addon-$version.zip" "$addon")
           gh release create "$tag" "dist/$addon-$version.zip" \
             --target "$GITHUB_SHA" --title "$addon $version" --notes-file notes.md
+      - name: Upload the release to CurseForge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          ADDON: ${{ steps.rel.outputs.addon }}
+          VERSION: ${{ steps.rel.outputs.version }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CF_API_KEY" ]; then
+            echo "No CF_API_KEY secret; skipping CurseForge."; exit 0
+          fi
+          if git ls-remote --tags origin "refs/tags/curseforge/$TAG" | grep -q .; then
+            echo "$TAG is already on CurseForge."; exit 0
+          fi
+          mkdir -p cf
+          gh release download "$TAG" --pattern '*.zip' --dir cf
+          gh release view "$TAG" --json body -q .body > cf/changelog.md
+          zip=$(ls cf/*.zip | head -n1)
+          curl -fsS -H "X-Api-Token: $CF_API_KEY" https://wow.curseforge.com/api/game/versions > cf/versions.json
+          python3 - <<'PY'
+          import json, os
+          versions = json.load(open("cf/versions.json"))
+          want = os.environ["CF_GAME_VERSION"]
+          ids = [v["id"] for v in versions if v.get("name") == want]
+          if not ids:
+              raise SystemExit("CurseForge has no WoW game version named %s" % want)
+          meta = {
+              "changelog": open("cf/changelog.md", encoding="utf-8").read(),
+              "changelogType": "markdown",
+              "displayName": os.environ["ADDON"].replace("_", " ") + " " + os.environ["VERSION"],
+              "gameVersions": ids[:1],
+              "releaseType": "release",
+          }
+          json.dump(meta, open("cf/metadata.json", "w"))
+          PY
+          curl -fsS -H "X-Api-Token: $CF_API_KEY" \
+            -F "metadata=<cf/metadata.json" \
+            -F "file=@$zip;filename=$(basename "$zip");type=application/zip" \
+            "https://wow.curseforge.com/api/projects/$CF_PROJECT/upload-file"
+          echo
+          git tag "curseforge/$TAG" "$GITHUB_SHA"
+          git push origin "curseforge/$TAG"
