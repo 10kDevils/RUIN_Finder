@@ -4,6 +4,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+## 0.8.10
+
+- Version matched to the rest of the RUIN suite; no changes.
+
 ## 0.8.9
 
 - Version matched to the rest of the RUIN suite; no changes.
