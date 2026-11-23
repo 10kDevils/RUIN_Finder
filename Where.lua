@@ -98,6 +98,29 @@ function Where.Build(page)
     ui.sub = W.Label(page, C.dim .. "Online members of every RUIN guild by zone. Only zones are shared, never positions.|r", "GameFontHighlightSmall")
     ui.sub:SetPoint("TOPLEFT", 2, -28)
 
+    -- joining: the game puts you in the copy of the zone (layer) of whoever's group you join
+    local J = ns.Join
+    if J then
+        ui.hop = W.Button(page, "Ask anyone here", 130, function()
+            local ok, err = J.AskAny()
+            M:Print(ok and "Asked the members in your zone; the first to answer invites you." or err)
+        end)
+        ui.hop:SetPoint("TOPLEFT", 0, -50)
+        ui.hop.tip = "A member in your zone invites you and you join their group, which puts you in their copy of the zone. "
+            .. "The game no longer tells addons which layer is which, so it may be your own."
+        ui.leave = W.Button(page, "Leave group", 100, function() J.Leave() end)
+        ui.leave:SetPoint("LEFT", ui.hop, "RIGHT", 6, 0)
+        ui.auto = W.Check(page, "Invite members who ask to join me", function() return db.autoHop end, function(v) db.autoHop = v end)
+        ui.auto:SetPoint("LEFT", ui.leave, "RIGHT", 12, 0)
+        ui.auto.tip = "Invite members in your zone who ask to join you, without asking you (never in combat)."
+        ui.offer = W.Label(page, "", "GameFontHighlightSmall")
+        ui.offer:SetPoint("TOPRIGHT", page, "TOPRIGHT", -112, -56)
+        ui.offer:SetJustifyH("RIGHT")
+        ui.offer:SetWordWrap(false)
+        ui.invite = W.Button(page, "Invite", 100)
+        ui.invite:SetPoint("TOPRIGHT", page, "TOPRIGHT", -6, -50)
+    end
+
     ui.zones = W.List(page, 22, function(row)
         row.a = W.Label(row, "")
         row.a:SetPoint("LEFT", 6, 0); row.a:SetWidth(200); row.a:SetWordWrap(false)
@@ -114,7 +137,7 @@ function Where.Build(page)
             row.b:SetText(tostring(e.count))
         end
     end)
-    ui.zones.frame:SetPoint("TOPLEFT", 0, -54)
+    ui.zones.frame:SetPoint("TOPLEFT", 0, ns.Join and -80 or -54)
     ui.zones.frame:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
     ui.zones.frame:SetWidth(290)
 
@@ -125,9 +148,20 @@ function Where.Build(page)
         row.b:SetPoint("LEFT", 180, 0); row.b:SetPoint("RIGHT", row, "RIGHT", -70, 0); row.b:SetWordWrap(false)
         row.w = W.Button(row, "Whisper", 64)
         row.w:SetPoint("RIGHT", -2, 0)
+        row.j = W.Button(row, "Join", 52)
+        row.j:SetPoint("RIGHT", row.w, "LEFT", -4, 0)
+        row.j.tip = "Ask them to invite you: joining their group puts you in their copy of the zone."
     end, function(row, m)
         row.a:SetText(W.ClassName(m.name, m.class))
         row.b:SetText(C.dim .. tostring(m.level or "") .. "  ·  " .. (m.guild or "") .. "|r")
+        local J = ns.Join
+        local canJoin = J and not J.CanAsk(m.name)
+        row.j:SetShown(canJoin and true or false)
+        row.b:SetPoint("RIGHT", row, "RIGHT", canJoin and -126 or -70, 0)
+        row.j:SetScript("OnClick", function()
+            local ok, err = J.Ask(m.name)
+            M:Print(ok and ("Asked " .. R.Util.ShortName(m.name) .. " to invite you.") or err)
+        end)
         row.w:SetScript("OnClick", function()
             if ChatFrame_SendTell then ChatFrame_SendTell(m.name) end
         end)
@@ -150,6 +184,23 @@ function Where.Refresh()
     ui.zones:SetItems(items)
     ui.people:SetEmptyText(ui.sel and "Nobody there now." or "")
     ui.people:SetItems(ui.sel and Where.Members(ui.sel) or {})
+    local J = ns.Join
+    if J and ui.hop then
+        local inGroup = IsInGroup and IsInGroup() and true or false
+        local st = J.State()
+        ui.hop:SetEnabled(not J.CanAsk(nil))
+        ui.leave:SetShown(inGroup and st ~= nil and st.joined and true or false)
+        local o = J.Offers()[1]
+        if o then
+            ui.offer:SetText(("%s%s|r asks to join you"):format(C.gold, R.Util.ShortName(o.name)))
+            ui.invite:SetScript("OnClick", function() local ok, err = J.Help(o.name); if not ok then M:Print(err) end end)
+            ui.invite:Show()
+        else
+            ui.offer:SetText(st and not st.joined and (C.dim .. (st.to and ("Waiting for " .. R.Util.ShortName(st.to) .. " to invite you...")
+                or "Waiting for someone in your zone to invite you...") .. "|r") or "")
+            ui.invite:Hide()
+        end
+    end
 end
 
 ---------------------------------------------------------------------------

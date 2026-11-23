@@ -1025,17 +1025,14 @@ local function buildBoard(panel)
     refresh()
 end
 
--- Finder's page: Board (the LFG board), Where (members by zone, marks),
--- Layers (layers and hops) and Timers (world bosses and buffs). Where and
--- Layers need RUIN Core 0.4.3.
+-- Finder's page: Board (the LFG board), Where (members by zone, joining a
+-- member, marks) and Timers (world bosses and buffs). Where needs RUIN Core 0.4.3.
 local function buildPage(panel)
     local names = { "Board" }
     if ns.Where then names[#names + 1] = "Where" end
-    if ns.Layers then names[#names + 1] = "Layers" end
     names[#names + 1] = "Timers"
     ui.tabs = W.SubTabs(panel, names, function(_, name)
         if name == "Where" then ns.Where.Refresh()
-        elseif name == "Layers" then ns.Layers.Refresh()
         elseif name == "Timers" then ns.Timers.Refresh()
         else refresh() end
     end)
@@ -1043,7 +1040,6 @@ local function buildPage(panel)
         local page = ui.tabs.pages[i]
         if name == "Board" then buildBoard(page)
         elseif name == "Where" then ns.Where.Build(page)
-        elseif name == "Layers" then ns.Layers.Build(page)
         else ns.Timers.Build(page) end
     end
     ui.tabNames = names
@@ -1066,7 +1062,7 @@ function M:OnEnable()
     if type(RUIN_FinderDB) ~= "table" then RUIN_FinderDB = {} end
     ns.Timers.Init(self, RUIN_FinderDB)
     if ns.Where then ns.Where.Init(self, db) end
-    if ns.Layers then ns.Layers.Init(self, db) end
+    if ns.Join then ns.Join.Init(self, db) end
 
     self:Listen("BEACON", "OnBeacon")
     self:Listen("ASK", "OnAsk")
@@ -1112,7 +1108,7 @@ BINDING_NAME_RUIN_FINDER_TOGGLE = "Toggle 'I'm looking'"
 -- /finder on [activity]      look as a player
 -- /finder group [activity]   list your group (set needed roles on the page)
 -- /finder off | badge
--- /finder timer <name> [minutes] | where | layers | hop | leave | tag <spot|move|lock>
+-- /finder timer <name> [minutes] | where | hop | join <name> | leave | tag <spot|move|lock>
 SLASH_RUINFINDER1 = "/finder"
 SlashCmdList.RUINFINDER = function(msg)
     msg = (msg or ""):lower()
@@ -1136,12 +1132,21 @@ SlashCmdList.RUINFINDER = function(msg)
             M:OpenTab(); M:SelectSubTab("Timers")
         end
     elseif cmd == "where" or cmd == "layers" then
-        M:OpenTab(); M:SelectSubTab(cmd)
-    elseif cmd == "hop" and ns.Layers then
-        local ok, err = ns.Layers.AskHop()
-        M:Print(ok and "Asked the members on other layers of this zone." or err)
-    elseif cmd == "leave" and ns.Layers then
-        ns.Layers.Leave()
+        M:OpenTab(); M:SelectSubTab("where")
+    elseif cmd == "hop" and ns.Join then
+        local ok, err = ns.Join.AskAny()
+        M:Print(ok and "Asked the members in your zone; the first to answer invites you." or err)
+    elseif cmd == "join" and ns.Join then
+        -- the member's name as RUIN knows it (the command line is lowercased)
+        local want, name = R.Util.ShortName(rest:match("^(%S.-)%s*$") or ""):lower(), nil
+        for _, m in ipairs(R:GetOrgMembers()) do
+            if m.online and R.Util.ShortName(m.name):lower() == want then name = m.name end
+        end
+        if not name then return M:Print("Usage: /finder join <member in your zone>") end
+        local ok, err = ns.Join.Ask(name)
+        M:Print(ok and ("Asked " .. R.Util.ShortName(name) .. " to invite you.") or err)
+    elseif cmd == "leave" and ns.Join then
+        ns.Join.Leave()
     elseif cmd == "tag" and ns.Where then
         local arg = rest:match("^(%S*)")
         if arg == "move" or arg == "unlock" or arg == "lock" then

@@ -4,6 +4,8 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+- **Layers are gone; joining a member replaces them.** WoW Forever no longer lets addons tell one layer from another, so Finder can't show which layer anyone is on or send you to a chosen one, and the Layers tab is removed. On the Where tab, members in your zone now have a *Join* button: they invite you and you land in their copy of the zone (`/finder join <name>`). *Ask anyone here* (`/finder hop`) lets any member in your zone answer, though it may be your own layer.
+
 ## 0.8.10
 
 - Version matched to the rest of the RUIN suite; no changes.
