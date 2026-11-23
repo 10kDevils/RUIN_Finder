@@ -4,6 +4,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+## 0.8.9
+
+- Version matched to the rest of the RUIN suite; no changes.
+
 ## 0.8.2
 
 - **Lock tag locks the tag.** The Where page's button only ever unlocked it; pressing it again now locks the tag where you dropped it.
