@@ -66,7 +66,7 @@ function Join.Ask(name)
     local zone = myZone()
     ask = { at = GetTime(), zone = zone, to = name, any = name == nil }
     if name then
-        M:Send("JOINME", { z = zone }, "PEER", name, R.PRIORITY.ALERT)
+        M:Send("JOINME", { z = zone }, "PEER", name, R.PRIORITY.ALERT, { player = true })
     else
         M:Send("HOPANY", { z = zone }, "ORG", nil, R.PRIORITY.ALERT)
     end

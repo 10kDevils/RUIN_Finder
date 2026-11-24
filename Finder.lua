@@ -417,7 +417,7 @@ local function requestJoin(e)
     end
     requested[e.name] = now
     local p = R:GetPlayer()
-    M:Send("JOINREQ", { g = p.guid, c = p.class, l = p.level, sp = specField(), gu = p.guild, role = myRoleFor(e), a = e.a }, "PEER", e.name)
+    M:Send("JOINREQ", { g = p.guid, c = p.class, l = p.level, sp = specField(), gu = p.guild, role = myRoleFor(e), a = e.a }, "PEER", e.name, nil, { player = true })
     if isFull(e) then
         M:Print(("Asked %s to put you in their group's queue (as %s); the group is full for now."):format(e.name, myRoleFor(e)))
     else
